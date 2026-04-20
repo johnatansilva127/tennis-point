@@ -6,8 +6,8 @@
 
 // ⚠️ TROCA esses 2 valores pelos do TEU projeto Supabase:
 // Project Settings → API → Project URL e anon public key
-const SUPABASE_URL = 'https://XXXXXXXXXXXXXXXX.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGc...COLE_A_CHAVE_ANON_PUBLIC_AQUI';
+const SUPABASE_URL = 'https://mhgfarmyopauqtpdvng.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_Qi8veGRmVbT8apc7iKYFow_cjR_UFSF';
 
 // Carrega o SDK do Supabase via CDN
 // (adiciona esta tag no index.html ANTES de supabase-client.js:
