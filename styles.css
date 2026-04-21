@@ -1573,3 +1573,33 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   .bracket-round-label { width: 260px; font-size: 12px; }
   .bracket-next-btn { top: 10px; right: 10px; padding: 5px 8px; font-size: 10px; }
 }
+
+
+/* ==================================================
+   LOGO FIX v3.0.6 — override brand-mark pra logo aparecer inteira
+   ================================================== */
+.brand-mark {
+  width: auto !important;
+  height: auto !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+.brand-mark img {
+  width: 80px !important;
+  height: 80px !important;
+  object-fit: contain;
+  border-radius: 16px;
+  display: block;
+}
+.topbar-brand {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+.topbar-brand img {
+  width: 24px; height: 24px;
+  object-fit: contain;
+  border-radius: 6px;
+  display: block;
+}
