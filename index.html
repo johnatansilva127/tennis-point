@@ -148,5 +148,11 @@
 <script src="data.js?v=4.0.0"></script>
 <script src="bracket.js?v=4.0.0"></script>
 <script src="app.js?v=4.0.0"></script>
+<script>
+  // PWA: registra SW pass-through pra habilitar instalação no Android Chrome
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(console.error);
+  }
+</script>
 </body>
 </html>
