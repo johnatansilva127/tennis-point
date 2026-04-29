@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=4.2.0">
+<link rel="stylesheet" href="styles.css?v=4.3.0">
 
 <!-- Favicon (aba do navegador) -->
 <link rel="icon" type="image/svg+xml" href="favicon/favicon.svg">
@@ -41,7 +41,7 @@
   <div class="login-container">
     <div class="login-brand">
       <div class="brand-mark">
-        <img src="logo.jpeg" alt="Tennis Point" style="width:80px;height:80px;object-fit:contain;border-radius:16px;display:block">
+        <img src="logo.png" alt="Tennis Point" style="width:80px;height:80px;object-fit:contain;border-radius:16px;display:block">
       </div>
       <h1 class="brand-name">TENNIS <em>POINT</em></h1>
       <p class="brand-tag">Plataforma Oficial de Tênis</p>
@@ -87,7 +87,7 @@
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
     <div class="topbar-brand">
-      <img src="logo.jpeg" alt="" style="width:24px;height:24px;object-fit:contain;border-radius:6px;vertical-align:middle;margin-right:8px">
+      <img src="logo.png" alt="" style="width:24px;height:24px;object-fit:contain;border-radius:6px;vertical-align:middle;margin-right:8px">
       TENNIS <em>POINT</em>
     </div>
     <button class="icon-btn notif-btn" id="btn-notif" aria-label="Notificações">
@@ -143,11 +143,50 @@
 <div class="modal-overlay" id="modal-overlay"></div>
 <div class="modal-host" id="modal-host"></div>
 
+<!-- ========== CARROSSEL DE PATROCINADORES (fixo na base, visível em login + app) ========== -->
+<aside class="sponsors-bar" id="sponsors-bar" aria-label="Patrocinadores">
+  <div class="sponsors-header">PATROCINADORES</div>
+  <div class="sponsors-marquee">
+    <!-- Track duplicado pra loop infinito sem corte -->
+    <div class="sponsors-track">
+      <a class="sponsor-chip"><img src="sponsors/sponsor-01.png" alt="" loading="lazy"></a>
+      <a class="sponsor-chip"><img src="sponsors/sponsor-02.png" alt="" loading="lazy"></a>
+      <a class="sponsor-chip"><img src="sponsors/sponsor-03.png" alt="" loading="lazy"></a>
+      <a class="sponsor-chip"><img src="sponsors/sponsor-04.png" alt="" loading="lazy"></a>
+      <a class="sponsor-chip"><img src="sponsors/sponsor-05.png" alt="" loading="lazy"></a>
+      <a class="sponsor-chip"><img src="sponsors/sponsor-06.png" alt="" loading="lazy"></a>
+      <a class="sponsor-chip"><img src="sponsors/sponsor-07.png" alt="" loading="lazy"></a>
+      <a class="sponsor-chip"><img src="sponsors/sponsor-08.png" alt="" loading="lazy"></a>
+      <a class="sponsor-chip"><img src="sponsors/sponsor-09.png" alt="" loading="lazy"></a>
+      <a class="sponsor-chip"><img src="sponsors/sponsor-10.png" alt="" loading="lazy"></a>
+      <a class="sponsor-chip"><img src="sponsors/sponsor-11.png" alt="" loading="lazy"></a>
+      <a class="sponsor-chip"><img src="sponsors/sponsor-12.png" alt="" loading="lazy"></a>
+      <a class="sponsor-chip"><img src="sponsors/sponsor-13.png" alt="" loading="lazy"></a>
+      <a class="sponsor-chip"><img src="sponsors/sponsor-14.png" alt="" loading="lazy"></a>
+      <!-- Duplicado pra loop infinito (translateX -50% perfeito) -->
+      <a class="sponsor-chip" aria-hidden="true"><img src="sponsors/sponsor-01.png" alt="" loading="lazy"></a>
+      <a class="sponsor-chip" aria-hidden="true"><img src="sponsors/sponsor-02.png" alt="" loading="lazy"></a>
+      <a class="sponsor-chip" aria-hidden="true"><img src="sponsors/sponsor-03.png" alt="" loading="lazy"></a>
+      <a class="sponsor-chip" aria-hidden="true"><img src="sponsors/sponsor-04.png" alt="" loading="lazy"></a>
+      <a class="sponsor-chip" aria-hidden="true"><img src="sponsors/sponsor-05.png" alt="" loading="lazy"></a>
+      <a class="sponsor-chip" aria-hidden="true"><img src="sponsors/sponsor-06.png" alt="" loading="lazy"></a>
+      <a class="sponsor-chip" aria-hidden="true"><img src="sponsors/sponsor-07.png" alt="" loading="lazy"></a>
+      <a class="sponsor-chip" aria-hidden="true"><img src="sponsors/sponsor-08.png" alt="" loading="lazy"></a>
+      <a class="sponsor-chip" aria-hidden="true"><img src="sponsors/sponsor-09.png" alt="" loading="lazy"></a>
+      <a class="sponsor-chip" aria-hidden="true"><img src="sponsors/sponsor-10.png" alt="" loading="lazy"></a>
+      <a class="sponsor-chip" aria-hidden="true"><img src="sponsors/sponsor-11.png" alt="" loading="lazy"></a>
+      <a class="sponsor-chip" aria-hidden="true"><img src="sponsors/sponsor-12.png" alt="" loading="lazy"></a>
+      <a class="sponsor-chip" aria-hidden="true"><img src="sponsors/sponsor-13.png" alt="" loading="lazy"></a>
+      <a class="sponsor-chip" aria-hidden="true"><img src="sponsors/sponsor-14.png" alt="" loading="lazy"></a>
+    </div>
+  </div>
+</aside>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase-client.js?v=4.2.0"></script>
-<script src="data.js?v=4.2.0"></script>
-<script src="bracket.js?v=4.2.0"></script>
-<script src="app.js?v=4.2.0"></script>
+<script src="supabase-client.js?v=4.3.0"></script>
+<script src="data.js?v=4.3.0"></script>
+<script src="bracket.js?v=4.3.0"></script>
+<script src="app.js?v=4.3.0"></script>
 <script>
   // PWA: registra SW pass-through pra habilitar instalação no Android Chrome
   if ('serviceWorker' in navigator) {
