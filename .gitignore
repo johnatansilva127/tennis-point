@@ -12,6 +12,11 @@ RESUMO-SESSAO.txt
 # Imagens originais das chaves WhatsApp (input do dia, não precisa versionar)
 chaves/
 
+# Local-only (PII, segredos, prep de domínio): mantém local mas NUNCA no repo público
+_local/
+tennis-point-credentials.*
+migrations/create-tournament-users.sql
+
 # OS
 .DS_Store
 Thumbs.db
