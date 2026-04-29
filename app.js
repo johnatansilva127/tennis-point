@@ -848,7 +848,7 @@ function renderAdminTournament() {
 }
 
 function bindAdminTournament() {
-  document.querySelector('[data-action="back-admin"]').addEventListener('click', () => navigate('admin'));
+  document.querySelector('[data-action="back-admin"]')?.addEventListener('click', () => navigate('admin'));
   document.querySelector('[data-screen="admin-draw"]')?.addEventListener('click', () => navigate('admin-draw'));
   document.querySelector('[data-action="edit-tournament"]')?.addEventListener('click', () => modalEditTournament());
   document.querySelector('[data-action="new-tournament"]')?.addEventListener('click', () => modalNewTournament());
@@ -1037,7 +1037,7 @@ function renderMembersList(filter, search) {
 }
 
 function bindAdminMembers() {
-  document.querySelector('[data-action="back-admin"]').addEventListener('click', () => navigate('admin'));
+  document.querySelector('[data-action="back-admin"]')?.addEventListener('click', () => navigate('admin'));
 
   let curFilter = 'all', curSearch = '';
   document.querySelectorAll('[data-cat-filter]').forEach(b => {
@@ -1050,9 +1050,10 @@ function bindAdminMembers() {
     });
   });
 
-  document.getElementById('search-member').addEventListener('input', e => {
+  document.getElementById('search-member')?.addEventListener('input', e => {
     curSearch = e.target.value;
-    document.getElementById('members-list').innerHTML = renderMembersList(curFilter, curSearch);
+    const list = document.getElementById('members-list');
+    if (list) list.innerHTML = renderMembersList(curFilter, curSearch);
     bindMemberRows();
   });
 
@@ -1150,7 +1151,7 @@ function renderAdminCourts() {
 }
 
 function bindAdminCourts() {
-  document.querySelector('[data-action="back-admin"]').addEventListener('click', () => navigate('admin'));
+  document.querySelector('[data-action="back-admin"]')?.addEventListener('click', () => navigate('admin'));
   document.querySelector('[data-action="new-court"]')?.addEventListener('click', () => {
     openModal({
       title: '➕ Nova quadra',
@@ -1256,7 +1257,7 @@ function renderAdminDraw() {
 }
 
 function bindAdminDraw() {
-  document.querySelector('[data-action="back-admin"]').addEventListener('click', () => navigate('admin'));
+  document.querySelector('[data-action="back-admin"]')?.addEventListener('click', () => navigate('admin'));
 
   document.querySelectorAll('[data-cat-select]').forEach(b => {
     b.addEventListener('click', () => {
@@ -1397,7 +1398,7 @@ function renderSettings() {
 }
 
 function bindSettings() {
-  document.querySelector('[data-action="back"]').addEventListener('click', () => navigate(STATE.user.role === 'admin' ? 'admin' : 'home'));
+  document.querySelector('[data-action="back"]')?.addEventListener('click', () => navigate(STATE.user.role === 'admin' ? 'admin' : 'home'));
 
   document.querySelectorAll('[data-theme-set]').forEach(el => {
     el.addEventListener('click', () => { STATE.settings.theme = el.dataset.themeSet; saveState(); applySettings(); navigate('settings'); });

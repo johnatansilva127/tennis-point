@@ -128,15 +128,16 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 .login-brand { text-align: center; margin-bottom: 32px; }
 .brand-mark {
   display: inline-flex;
-  width: 56px; height: 56px;
-  background: var(--brand);
-  color: var(--brand-text);
-  border-radius: 16px;
   align-items: center; justify-content: center;
   margin-bottom: 16px;
-  box-shadow: 0 8px 24px rgba(200, 255, 61, 0.4);
 }
 .brand-mark svg { width: 32px; height: 32px; }
+.brand-mark img {
+  width: 80px; height: 80px;
+  object-fit: contain;
+  border-radius: 16px;
+  display: block;
+}
 
 .brand-name {
   font-family: var(--font-display);
@@ -311,8 +312,17 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   font-weight: 800;
   font-size: 18px;
   letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .topbar-brand em { font-style: italic; color: var(--brand-dark); }
+.topbar-brand img {
+  width: 24px; height: 24px;
+  object-fit: contain;
+  border-radius: 6px;
+  display: block;
+}
 
 .icon-btn {
   width: 40px; height: 40px;
@@ -1572,34 +1582,4 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   .bracket-round, .bk-match { width: 260px; }
   .bracket-round-label { width: 260px; font-size: 12px; }
   .bracket-next-btn { top: 10px; right: 10px; padding: 5px 8px; font-size: 10px; }
-}
-
-
-/* ==================================================
-   LOGO FIX v3.0.6 — override brand-mark pra logo aparecer inteira
-   ================================================== */
-.brand-mark {
-  width: auto !important;
-  height: auto !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  border-radius: 0 !important;
-}
-.brand-mark img {
-  width: 80px !important;
-  height: 80px !important;
-  object-fit: contain;
-  border-radius: 16px;
-  display: block;
-}
-.topbar-brand {
-  display: flex !important;
-  align-items: center !important;
-  gap: 8px !important;
-}
-.topbar-brand img {
-  width: 24px; height: 24px;
-  object-fit: contain;
-  border-radius: 6px;
-  display: block;
 }

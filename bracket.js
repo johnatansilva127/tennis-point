@@ -4,21 +4,13 @@
    ================================================== */
 
 const ROUND_LABELS = {
+  R64: 'R64',
   R32: 'R32',
-  R16: 'R16',
+  R16: 'Oitavas de Final',
   QF: 'Quartas de Final',
   SF: 'Semifinal',
   F: 'Final',
 };
-
-function avatarHTML(memberId, size = 28) {
-  const m = memberId ? getMember(memberId) : null;
-  if (!m || !memberId) {
-    return `<div class="avatar bye" style="width:${size}px;height:${size}px;font-size:${Math.round(size*0.4)}px">×</div>`;
-  }
-  const color = `var(--${m.id ? AVATAR_COLORS[hashStr(m.name) % AVATAR_COLORS.length] : 'av-gray'})`;
-  return `<div class="avatar" style="background:${color};width:${size}px;height:${size}px;font-size:${Math.round(size*0.4)}px">${initials(m.name)}</div>`;
-}
 
 function hashStr(s) {
   let h = 0;
@@ -38,7 +30,8 @@ function renderPlayerRow(memberId, scores, isWinner, isBye, idx) {
 
   const m = getMember(memberId);
   const name = m ? m.name : 'BYE';
-  const colorVar = m ? AVATAR_COLORS[hashStr(m.name) % AVATAR_COLORS.length] : 'av-gray';
+  // AVATAR_COLORS já vem com prefixo "--" (ex: "--av-pink"), então usamos var(${colorVar}) sem "--"
+  const colorVar = m ? AVATAR_COLORS[hashStr(m.name) % AVATAR_COLORS.length] : '--av-gray';
 
   let scoresHTML = '';
   if (scores && scores.length) {
@@ -61,7 +54,7 @@ function renderPlayerRow(memberId, scores, isWinner, isBye, idx) {
 
   return `
     <div class="bk-player-row${isWinner === true ? ' winner' : ''}">
-      <div class="avatar" style="background:var(--${colorVar})">
+      <div class="avatar" style="background:var(${colorVar})">
         ${initials(name)}
         ${statusIcon}
       </div>
@@ -92,10 +85,11 @@ function renderMatch(match) {
   }
   const headerCount = setsP1 + setsP2;
 
+  const roundLabel = ROUND_LABELS[match.round] || match.round;
   return `
     <div class="bk-match" data-match-id="${match.id}">
       <div class="bk-match-head">
-        <div class="bk-trophy">#${match.n} • ${match.round}${match.round !== 'R32' && match.round !== 'F' ? ' • Tennis' : (match.round === 'R32' && !match.isBye ? ' • Tennis' : '')}</div>
+        <div class="bk-trophy">#${match.n} • ${roundLabel}</div>
         <div class="bk-options">${headerCount}</div>
       </div>
       ${renderPlayerRow(match.p1, match.scores, p1IsWinner, match.isBye, 0)}

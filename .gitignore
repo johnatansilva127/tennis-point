@@ -1,0 +1,20 @@
+# Local development artifacts
+_auth.json
+_check.js
+_deployed_check.js
+_health.txt
+_test.json
+RESUMO-SESSAO.txt
+
+# Claude Code config (local dev server, launch.json)
+.claude/
+
+# Imagens originais das chaves WhatsApp (input do dia, não precisa versionar)
+chaves/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
