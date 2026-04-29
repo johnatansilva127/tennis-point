@@ -149,6 +149,17 @@ async function loadUserAndShowApp() {
 
     // Carrega dados globais do banco
     await loadAppData();
+
+    // Liga accountEmails: descobre em quais slots/categorias o usuário aparece.
+    // Usado pra highlight "você está aqui" e aba "Minhas categorias".
+    const myEmail = (STATE.user.email || '').toLowerCase();
+    STATE.user.tournamentSlots = (STATE.tournamentPlayers || [])
+      .filter(p => (p.accountEmails || []).some(e => e.toLowerCase() === myEmail))
+      .map(p => ({ id: p.id, name: p.name, categoryKey: p.categoryKey }));
+    STATE.user.tournamentCategoryIds = [
+      ...new Set(STATE.user.tournamentSlots.map(s => s.categoryKey)),
+    ];
+
     showApp();
   } catch (e) {
     console.error('Erro ao carregar usuário:', e);
@@ -261,12 +272,27 @@ async function logout() {
 
 function updateDrawerUser() {
   if (!STATE.user) return;
-  const cat = STATE.user.category ? getCategory(STATE.user.category) : null;
+  const isAdmin = STATE.user.role === 'admin';
+  const myCats = STATE.user.tournamentCategoryIds || [];
+  const myCatNames = myCats.map(id => getCategory(id)?.name).filter(Boolean);
+
   document.getElementById('drawer-avatar').textContent = initials(STATE.user.name);
-  document.getElementById('drawer-name').textContent = STATE.user.name;
-  document.getElementById('drawer-cat').textContent = cat
-    ? `${cat.icon} Categoria ${cat.name}`
-    : `🔑 ${STATE.user.role === 'admin' ? 'Administrador' : 'Membro'}`;
+  // Nome com badge ADMIN inline pra Johnatan saber visualmente que tem write
+  document.getElementById('drawer-name').innerHTML = isAdmin
+    ? `${STATE.user.name} <span class="admin-badge">ADMIN</span>`
+    : STATE.user.name;
+
+  // Linha de categoria: prefere mostrar todas as categorias do torneio, fallback pro role
+  let catLine;
+  if (myCatNames.length) {
+    catLine = `🎾 ${myCatNames.join(' · ')}`;
+  } else if (isAdmin) {
+    catLine = `🔑 Administrador`;
+  } else {
+    const cat = STATE.user.category ? getCategory(STATE.user.category) : null;
+    catLine = cat ? `${cat.icon} Categoria ${cat.name}` : `🎾 Membro`;
+  }
+  document.getElementById('drawer-cat').textContent = catLine;
 }
 
 /* -------- App Shell -------- */
@@ -559,7 +585,134 @@ function bindTournament() {
   });
   if (currentTournamentTab === 'chave') {
     const host = document.getElementById('bracket-host');
-    if (host) renderBracket(STATE.brackets[currentBracketCategory], host);
+    if (host) {
+      renderBracket(STATE.brackets[currentBracketCategory], host);
+      bindBracketAdminClicks();
+    }
+  }
+}
+
+/* Admin: clicar num match abre editor pra setar score/winner.
+   Member comum: noop. */
+function bindBracketAdminClicks() {
+  if (!STATE.user || STATE.user.role !== 'admin') return;
+  const cards = document.querySelectorAll('.bk-match');
+  cards.forEach(c => {
+    c.classList.add('admin-editable');
+    c.addEventListener('click', () => openMatchEditor(c.dataset.matchId));
+  });
+}
+
+function findMatchInBracket(catId, matchId) {
+  const br = STATE.brackets[catId];
+  if (!br) return null;
+  for (const round of br.rounds) {
+    const m = (br.matches[round] || []).find(x => x.id === matchId);
+    if (m) return { match: m, round };
+  }
+  return null;
+}
+
+function openMatchEditor(matchId) {
+  const catId = currentBracketCategory;
+  const found = findMatchInBracket(catId, matchId);
+  if (!found) { toast('Match não encontrado', 'error'); return; }
+  const { match, round } = found;
+  const p1Name = memberName(match.p1);
+  const p2Name = memberName(match.p2);
+
+  // Renderiza inputs pros 3 sets (suficiente pra padrão tennis: 2 sets + super tiebreak)
+  const setsRows = [0, 1, 2].map(i => {
+    const s = match.scores?.[i] || ['', ''];
+    return `
+      <div class="row gap-sm">
+        <div class="field flex-1"><label>Set ${i + 1} — ${p1Name}</label>
+          <input type="number" min="0" max="20" id="set-${i}-p1" value="${s[0] === '' ? '' : s[0]}" placeholder="—"></div>
+        <div class="field flex-1"><label>Set ${i + 1} — ${p2Name}</label>
+          <input type="number" min="0" max="20" id="set-${i}-p2" value="${s[1] === '' ? '' : s[1]}" placeholder="—"></div>
+      </div>`;
+  }).join('');
+
+  openModal({
+    title: `✏️ Editar match ${match.n} — ${ROUND_LABELS[round] || round}`,
+    sub: `${p1Name} vs ${p2Name}`,
+    body: `
+      ${setsRows}
+      <div class="field">
+        <label>Vencedor</label>
+        <select id="match-winner">
+          <option value="">— ainda não decidido —</option>
+          ${match.p1 ? `<option value="${match.p1}" ${match.winner === match.p1 ? 'selected' : ''}>${p1Name}</option>` : ''}
+          ${match.p2 ? `<option value="${match.p2}" ${match.winner === match.p2 ? 'selected' : ''}>${p2Name}</option>` : ''}
+        </select>
+      </div>
+      <div class="field"><label>Walkover / observação (opcional)</label><input id="match-walkover" placeholder="ex: lesão, WO" value="${match.walkover_reason || match.walkoverReason || ''}"></div>
+    `,
+    actions: [
+      { label: 'Cancelar', class: 'btn-secondary', onClick: closeModal },
+      { label: 'Salvar', class: 'btn-primary', onClick: () => saveMatchEdit(catId, matchId) },
+    ],
+  });
+}
+
+async function saveMatchEdit(catId, matchId) {
+  const found = findMatchInBracket(catId, matchId);
+  if (!found) return;
+  const { match } = found;
+
+  const scores = [];
+  for (let i = 0; i < 3; i++) {
+    const a = document.getElementById(`set-${i}-p1`).value;
+    const b = document.getElementById(`set-${i}-p2`).value;
+    if (a !== '' && b !== '') scores.push([Number(a), Number(b)]);
+  }
+  const winner = document.getElementById('match-winner').value || null;
+  const walkover = document.getElementById('match-walkover').value.trim() || null;
+
+  match.scores = scores;
+  match.winner = winner;
+  match.walkover_reason = walkover;
+
+  // Auto-advance pro próximo round se houver winner
+  autoAdvanceWinnerInBracket(STATE.brackets[catId], match);
+
+  closeModal();
+  saveState();
+
+  // Persiste no Supabase
+  try {
+    if (STATE._activeTournamentId) {
+      await TP.Brackets.updateData(STATE._activeTournamentId, catId, STATE.brackets[catId]);
+      toast('Match salvo + sync Supabase ✅', 'success');
+    } else {
+      toast('Match salvo localmente (sem tournament_id)', 'info');
+    }
+  } catch (e) {
+    console.warn('Erro ao salvar no Supabase:', e);
+    toast('Salvo localmente — Supabase falhou: ' + (e.message || 'erro'), 'error');
+  }
+
+  navigate('tournament');
+}
+
+/* Quando um match ganha winner, propaga pro próximo round se a vaga estiver vazia.
+   IMPORTANTE: só preenche se o slot do próximo round for null. Não sobrescreve
+   slots já populados (esses podem ser fixos do seed do torneio — caso da Cat A
+   onde R16[3] foi pré-populado com Sandro x Rodrigo V., não bate com auto-advance
+   "padrão" do R32 idx 6+7). */
+function autoAdvanceWinnerInBracket(bracket, finishedMatch) {
+  if (!bracket || !finishedMatch.winner) return;
+  const idx = bracket.rounds.indexOf(finishedMatch.round);
+  if (idx < 0 || idx >= bracket.rounds.length - 1) return;
+  const cur = bracket.matches[finishedMatch.round];
+  const nxt = bracket.matches[bracket.rounds[idx + 1]];
+  const myIdx = cur.findIndex(m => m.id === finishedMatch.id);
+  const targetIdx = Math.floor(myIdx / 2);
+  if (!nxt[targetIdx]) return;
+  if (myIdx % 2 === 0) {
+    if (nxt[targetIdx].p1 == null) nxt[targetIdx].p1 = finishedMatch.winner;
+  } else {
+    if (nxt[targetIdx].p2 == null) nxt[targetIdx].p2 = finishedMatch.winner;
   }
 }
 
@@ -676,18 +829,40 @@ function bindCourts() {
 function renderProfile() {
   const u = STATE.user;
   const cat = u.category ? getCategory(u.category) : null;
+  const isAdmin = u.role === 'admin';
+  const myCats = (u.tournamentCategoryIds || []).map(id => getCategory(id)).filter(Boolean);
+  const mySlots = u.tournamentSlots || [];
 
   return `
     <div class="profile-header">
       <div class="avatar xl" style="background:var(--brand);color:var(--brand-text)">${initials(u.name)}</div>
-      <div class="profile-name">${u.name}</div>
-      <div class="profile-loc">${u.role === 'admin' ? '🔑 Administrador' : (u.email || '')}</div>
+      <div class="profile-name">${u.name}${isAdmin ? ' <span class="admin-badge">ADMIN</span>' : ''}</div>
+      <div class="profile-loc">${isAdmin ? '🔑 Administrador' : (u.email || '')}</div>
       <div class="stats-row">
-        <div class="sc"><div class="sc-num">0</div><div class="sc-lbl">Partidas</div></div>
-        <div class="sc"><div class="sc-num">0</div><div class="sc-lbl">Vitórias</div></div>
-        <div class="sc"><div class="sc-num">${cat ? cat.name : '—'}</div><div class="sc-lbl">Categoria</div></div>
+        <div class="sc"><div class="sc-num">${mySlots.length}</div><div class="sc-lbl">Slots</div></div>
+        <div class="sc"><div class="sc-num">${myCats.length}</div><div class="sc-lbl">Categorias</div></div>
+        <div class="sc"><div class="sc-num">${cat ? cat.name : (myCats[0]?.name || '—')}</div><div class="sc-lbl">Principal</div></div>
       </div>
     </div>
+
+    ${myCats.length ? `
+      <div class="card mb-md">
+        <div class="section-title" style="margin:0 0 12px">🏆 Minhas categorias no torneio</div>
+        ${myCats.map(c => {
+          const slotsHere = mySlots.filter(s => s.categoryKey === c.id);
+          return `
+            <div class="list-row" data-my-cat="${c.id}" style="cursor:pointer">
+              <div class="avatar lg" style="background:var(--av-blue);font-size:16px">${c.icon || '🎾'}</div>
+              <div class="lr-info">
+                <div class="lr-title">${c.name}</div>
+                <div class="lr-meta">${slotsHere.map(s => s.name).join(' · ')}</div>
+              </div>
+              <div class="lr-action">›</div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    ` : ''}
 
     <div class="card mb-md">
       <div class="section-title" style="margin:0 0 12px">Editar perfil</div>
@@ -718,6 +893,15 @@ function renderProfile() {
 }
 
 function bindProfile() {
+  // Click numa "minha categoria" leva pra chave dela
+  document.querySelectorAll('[data-my-cat]').forEach(el => {
+    el.addEventListener('click', () => {
+      currentBracketCategory = el.dataset.myCat;
+      currentTournamentTab = 'chave';
+      navigate('tournament');
+    });
+  });
+
   document.getElementById('btn-save-profile')?.addEventListener('click', async () => {
     const name  = document.getElementById('prof-name').value.trim();
     const phone = document.getElementById('prof-phone').value.trim();

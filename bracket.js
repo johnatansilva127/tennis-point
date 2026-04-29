@@ -32,6 +32,9 @@ function renderPlayerRow(memberId, scores, isWinner, isBye, idx) {
   const name = m ? m.name : 'BYE';
   // AVATAR_COLORS já vem com prefixo "--" (ex: "--av-pink"), então usamos var(${colorVar}) sem "--"
   const colorVar = m ? AVATAR_COLORS[hashStr(m.name) % AVATAR_COLORS.length] : '--av-gray';
+  // É o usuário logado? Marca pra highlight visual
+  const mySlots = (typeof STATE !== 'undefined' && STATE.user && STATE.user.tournamentSlots) || [];
+  const isMe = !!memberId && mySlots.some(s => s.id === memberId);
 
   let scoresHTML = '';
   if (scores && scores.length) {
@@ -53,12 +56,12 @@ function renderPlayerRow(memberId, scores, isWinner, isBye, idx) {
     : '';
 
   return `
-    <div class="bk-player-row${isWinner === true ? ' winner' : ''}">
+    <div class="bk-player-row${isWinner === true ? ' winner' : ''}${isMe ? ' is-me' : ''}">
       <div class="avatar" style="background:var(${colorVar})">
         ${initials(name)}
         ${statusIcon}
       </div>
-      <div class="bk-player-name">${name}</div>
+      <div class="bk-player-name">${name}${isMe ? ' <span class="me-badge">VOCÊ</span>' : ''}</div>
       <div class="bk-scores">${scoresHTML}</div>
     </div>
   `;

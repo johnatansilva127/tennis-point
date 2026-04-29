@@ -146,6 +146,20 @@ const Brackets = {
       .single();
     if (error) throw error;
     return data;
+  },
+
+  // Atualiza a coluna data JSONB de uma bracket específica.
+  // Usado pelo admin pra persistir scores/winners.
+  async updateData(tournamentId, categoryId, newData) {
+    const { data, error } = await sb
+      .from('brackets')
+      .update({ data: newData, drawn: true })
+      .eq('tournament_id', tournamentId)
+      .eq('category_id', categoryId)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
   }
 };
 
