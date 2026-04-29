@@ -1640,15 +1640,16 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 }
 
 /* ==================================================
-   CARROSSEL DE PATROCINADORES (v4.3)
+   CARROSSEL DE PATROCINADORES (v4.4)
    Fixo na base, infinito via translateX -50%, fade nas bordas, pausa no hover.
    Visível em login + app shell (mesmo elemento ancorado ao body).
+   Logos preenchem 100% do chip via object-fit: cover.
    ================================================== */
 :root {
-  --sponsors-h: 62px;        /* desktop */
+  --sponsors-h: 80px;        /* desktop — bar maior pra logos respirarem */
 }
 @media (max-width: 480px) {
-  :root { --sponsors-h: 48px; }   /* mobile menor */
+  :root { --sponsors-h: 56px; }   /* mobile compacto */
 }
 
 .sponsors-bar {
@@ -1691,8 +1692,9 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 .sponsors-track {
   display: flex;
   align-items: center;
-  gap: 18px;
-  padding: 0 18px;
+  /* SEM gap — rolagem contínua, logos encostados um no outro */
+  gap: 0;
+  padding: 0;
   /* width: max-content garante que o flex não comprima os filhos */
   width: max-content;
   /* 28 chips (14 originais + 14 duplicados) → translateX -50% volta exatamente
@@ -1710,32 +1712,46 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   100% { transform: translateX(-50%); }
 }
 
-/* Chip branco arredondado pra unificar logos com fundos variados (preto, branco, amarelo, etc) */
+/* Chip transparente. Logo preenche 100% via object-fit: cover.
+   Sem gap entre chips: rolagem contínua. Linha sutil divide chips adjacentes
+   pra evitar borrão entre logos com fundos claros. */
 .sponsor-chip {
   flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: calc(var(--sponsors-h) - 16px);
-  padding: 4px 10px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-  /* Sem text-decoration etc, mas alguns logos vão ter sombra própria */
+  display: block;
+  width: 130px;                       /* fixo pra cover ter referência */
+  height: calc(var(--sponsors-h) - 18px);
+  border-radius: 0;                   /* sem cantos arredondados (chips encostados) */
+  overflow: hidden;                   /* clipa qualquer overflow do cover */
+  background: transparent;
+  padding: 0;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+.sponsor-chip:last-child {
+  border-right: none;                 /* não duplica linha no último (sponsors duplicados encostam no início do loop) */
 }
 
 .sponsor-chip img {
+  width: 100%;
   height: 100%;
-  width: auto;
-  max-width: 110px;
-  object-fit: contain;
+  object-fit: cover;
+  object-position: center center;
   display: block;
+}
+
+/* Exceções: logos altos/quadrados onde cover corta texto crítico → contain */
+/* sponsor-01 = Voltex (logo "V" + "voltex soluções automáticas" empilhado, vertical) */
+/* sponsor-05 = Esquina do Pão (brasão + faixa, quadrado) */
+.sponsor-chip:nth-child(1) img,
+.sponsor-chip:nth-child(15) img,    /* duplicado de sponsor-01 */
+.sponsor-chip:nth-child(5) img,
+.sponsor-chip:nth-child(19) img {   /* duplicado de sponsor-05 */
+  object-fit: contain;
+  background: rgba(255, 255, 255, 0.04);   /* leve halo pra não sumir no fundo escuro */
 }
 
 @media (max-width: 480px) {
   .sponsors-track { gap: 12px; padding: 0 12px; }
-  .sponsor-chip { padding: 3px 8px; max-width: 90px; }
-  .sponsor-chip img { max-width: 86px; }
+  .sponsor-chip { width: 100px; }
   .sponsors-header { font-size: 8px; padding-top: 3px; }
 }
 
