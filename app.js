@@ -1196,6 +1196,17 @@ function openMatchEditor(matchId) {
         <input id="match-walkover" placeholder="ex: lesão, WO, abandono" value="${match.walkover_reason || match.walkoverReason || ''}">
       </div>
       <p class="muted" style="font-size:11px;margin-top:-8px">💡 Se o match foi resolvido por desistência/abandono, deixa scores em branco e preenche só esse campo + o vencedor.</p>
+      <div class="row gap-sm" style="margin-top:8px">
+        <div class="field flex-1">
+          <label>Data do jogo</label>
+          <input type="date" id="match-date" value="${match.date || ''}">
+        </div>
+        <div class="field flex-1">
+          <label>Horário</label>
+          <input type="time" id="match-time" value="${match.time || ''}" step="300">
+        </div>
+      </div>
+      <p class="muted" style="font-size:11px;margin-top:-8px">📅 Aparece no card do match e na aba "Horários" do torneio.</p>
     `,
     actions: [
       { label: 'Cancelar', class: 'btn-secondary', onClick: closeModal },
@@ -1217,10 +1228,14 @@ async function saveMatchEdit(catId, matchId) {
   }
   const winner = document.getElementById('match-winner').value || null;
   const walkover = document.getElementById('match-walkover').value.trim() || null;
+  const matchDate = document.getElementById('match-date')?.value || null;
+  const matchTime = document.getElementById('match-time')?.value || null;
 
   match.scores = scores;
   match.winner = winner;
   match.walkover_reason = walkover;
+  match.date = matchDate;
+  match.time = matchTime;
 
   // Auto-advance pro próximo round se houver winner
   autoAdvanceWinnerInBracket(STATE.brackets[catId], match);

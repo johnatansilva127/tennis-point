@@ -155,22 +155,28 @@ function renderBracket(bracket, container) {
 
   const rounds = bracket.rounds;
 
-  // Header com nomes das rodadas + ação de sortear (admin) ou contador (todos)
+  // Header com nomes das rodadas + barra de ação separada (não overlap)
   const isAdmin = typeof STATE !== 'undefined' && STATE.user && STATE.user.role === 'admin';
   const totalMatches = rounds.reduce((s, r) => s + (bracket.matches[r] || []).length, 0);
-  const headerActionHTML = isAdmin
-    ? `<button class="bracket-action-btn" data-action="resort-bracket" title="Re-sortear esta categoria">
-         <svg viewBox="0 0 16 16" width="13" height="13" fill="none" aria-hidden="true">
-           <path d="M3 6h7M10 6L7 3M10 6L7 9M13 10H6M6 10l3 3M6 10l3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-         </svg>
-         <span>Re-sortear</span>
-       </button>`
-    : `<span class="bracket-meta-pill">${totalMatches} jogos</span>`;
+
+  const toolbarHTML = `
+    <div class="bracket-toolbar">
+      <span class="bracket-toolbar-info">${totalMatches} jogos · ${rounds.length} rodadas</span>
+      ${isAdmin ? `
+        <button class="bracket-action-btn" data-action="resort-bracket" title="Re-sortear esta categoria">
+          <svg viewBox="0 0 16 16" width="13" height="13" fill="none" aria-hidden="true">
+            <path d="M3 6h7M10 6L7 3M10 6L7 9M13 10H6M6 10l3 3M6 10l3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>Re-sortear</span>
+        </button>
+      ` : ''}
+    </div>
+  `;
 
   const headerHTML = `
+    ${toolbarHTML}
     <div class="bracket-rounds-header">
       ${rounds.map(r => `<div class="bracket-round-label">${ROUND_LABELS[r] || r}</div>`).join('')}
-      ${headerActionHTML}
     </div>
   `;
 
