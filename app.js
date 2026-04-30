@@ -8,6 +8,8 @@ let currentBracketCategory = 'cat-5a';
 let currentDrawCategory = null;
 let drawState = { players: [], seeds: [] };
 let bracketEditMode = false;          // toggle global modo edição de chave (admin)
+let _realtimeBracketChannel = null;   // subscription ativa (Realtime brackets)
+let _realtimeNotifChannel   = null;   // subscription de notificações
 
 /* -------- Init -------- */
 document.addEventListener('DOMContentLoaded', async () => {
@@ -203,9 +205,26 @@ async function loadAppData() {
       STATE._activeTournamentId = tournament.id;
 
       const brackets = await TP.Brackets.byTournament(tournament.id);
+      // Reset pra evitar duplicar entries entre logins na mesma sessão
+      const allEntries = [];
       brackets.forEach(b => {
-        if (b.data) STATE.brackets[b.category_id] = b.data;
+        if (b.data) {
+          STATE.brackets[b.category_id] = b.data;
+          // Achata entries de TODAS as categorias num único array tournamentPlayers,
+          // com categoryKey vindo do category_id da bracket (no fallback de entries
+          // legadas que não tenham o campo).
+          (b.data.entries || []).forEach(e => {
+            allEntries.push({
+              id:            e.id,
+              name:          e.name,
+              categoryKey:   e.categoryKey || b.category_id,
+              accountEmails: e.accountEmails || [],
+            });
+          });
+        }
       });
+      // Substitui (ao invés de concatenar) pra ficar canônico em cada login
+      STATE.tournamentPlayers = allEntries;
     }
 
     // Carrega notificações
@@ -256,10 +275,14 @@ function showApp() {
   document.getElementById('screen-login').classList.remove('active');
   document.getElementById('app-shell').classList.remove('hidden');
   updateDrawerUser();
+  // Subscreve Realtime depois que loadAppData populou _activeTournamentId.
+  // Não bloqueante: se falhar (RLS, conexão), o app continua funcional via polling manual.
+  subscribeRealtime();
   navigate(STATE.user.role === 'admin' ? 'admin' : 'home');
 }
 
 async function logout() {
+  unsubscribeRealtime();
   await TP.Auth.signOut();
   STATE.user = null;
   document.getElementById('app-shell').classList.add('hidden');
@@ -269,6 +292,80 @@ async function logout() {
   document.getElementById('btn-login').textContent = 'Entrar';
   document.getElementById('btn-login').disabled = false;
   closeDrawer();
+}
+
+/* Realtime: quando o admin atualiza scores/brackets de qualquer dispositivo,
+   todos os clientes conectados ao torneio recebem o novo `data` JSONB e
+   re-renderizam automaticamente. Throttle implícito via re-render só na tela
+   atual; navegação preserva STATE atualizado. */
+function subscribeRealtime() {
+  unsubscribeRealtime(); // garante idempotência
+  if (!STATE._activeTournamentId) return;
+
+  try {
+    _realtimeBracketChannel = TP.Realtime.subscribeBrackets(
+      STATE._activeTournamentId,
+      (payload) => {
+        // payload.new tem a row inteira; data JSONB já vem parseado
+        const row = payload.new || payload.old;
+        if (!row || !row.category_id) return;
+        if (payload.eventType === 'DELETE') {
+          delete STATE.brackets[row.category_id];
+        } else if (row.data) {
+          STATE.brackets[row.category_id] = row.data;
+        }
+        // Se a tela atual é o torneio mostrando a categoria afetada, re-renderiza
+        const isViewingThisCategory = currentScreen === 'tournament'
+          && currentTournamentTab === 'chave'
+          && currentBracketCategory === row.category_id;
+        if (isViewingThisCategory) {
+          navigate('tournament');
+          // Toast discreto pra usuário saber que dado atualizou em background
+          if (payload.eventType !== 'DELETE') {
+            toast('Chave atualizada em tempo real', 'info');
+          }
+        }
+      }
+    );
+
+    // Notificações em tempo real pro usuário logado (badge no sino atualiza)
+    if (STATE.user?.id) {
+      _realtimeNotifChannel = TP.Realtime.subscribeNotifications(
+        STATE.user.id,
+        (payload) => {
+          const n = payload.new;
+          if (!n) return;
+          STATE.notifications.unshift({
+            id: n.id,
+            icon: n.type === 'match' ? '🏆' : n.type === 'booking' ? '📅' : '📣',
+            title: n.title + (n.body ? ` — ${n.body}` : ''),
+            time: 'agora',
+            read: false,
+          });
+          // Atualiza badge do sino se existir
+          const badge = document.getElementById('notif-count');
+          if (badge) {
+            const unread = STATE.notifications.filter(x => !x.read).length;
+            badge.textContent = unread;
+            badge.style.display = unread > 0 ? '' : 'none';
+          }
+        }
+      );
+    }
+  } catch (e) {
+    console.warn('Realtime subscribe failed:', e);
+  }
+}
+
+function unsubscribeRealtime() {
+  if (_realtimeBracketChannel) {
+    TP.Realtime.unsubscribe(_realtimeBracketChannel);
+    _realtimeBracketChannel = null;
+  }
+  if (_realtimeNotifChannel) {
+    TP.Realtime.unsubscribe(_realtimeNotifChannel);
+    _realtimeNotifChannel = null;
+  }
 }
 
 function updateDrawerUser() {

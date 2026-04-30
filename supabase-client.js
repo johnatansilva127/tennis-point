@@ -392,6 +392,22 @@ const Notifications = {
 // REALTIME — atualização ao vivo quando dados mudam
 // =========================================================
 const Realtime = {
+  /* Subscreve mudanças em TODAS as brackets de um torneio. Útil pra que
+     quando o admin atualiza scores/winners de uma categoria, todos os
+     dispositivos conectados recebam o novo estado em tempo real.
+     onChange recebe payload com { eventType, new, old }. */
+  subscribeBrackets(tournamentId, onChange) {
+    return sb
+      .channel(`brackets:${tournamentId}`)
+      .on('postgres_changes',
+          { event: '*', schema: 'public', table: 'brackets',
+            filter: `tournament_id=eq.${tournamentId}` },
+          onChange)
+      .subscribe();
+  },
+
+  /* Mantido por compatibilidade — não usado. A app guarda matches dentro
+     de brackets.data (JSONB), não na tabela matches. */
   subscribeMatches(bracketId, onChange) {
     return sb
       .channel(`matches:${bracketId}`)
@@ -418,6 +434,11 @@ const Realtime = {
             filter: `user_id=eq.${userId}` },
           onChange)
       .subscribe();
+  },
+
+  /* Helper pra desinscrever uma subscription retornada acima */
+  unsubscribe(channel) {
+    if (channel) sb.removeChannel(channel);
   }
 };
 
