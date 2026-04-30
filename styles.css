@@ -1861,11 +1861,26 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   margin-right: 12px !important;
 }
 
-/* Conectores SVG: mais grossos e visíveis */
+/* Conectores SVG: bem visíveis com cor de marca pros caminhos de winners.
+   Caminho neutro (sem winner ainda): cinza claro, mais grosso.
+   Caminho de winner: cor da marca (lima) com glow sutil pra rastrear progressão. */
 .bracket-svg path {
-  stroke-width: 2 !important;
-  opacity: 0.85 !important;
-  stroke: var(--bk-border-strong) !important;
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.45) !important;
+  stroke-width: 3 !important;
+  stroke-opacity: 1 !important;
+  opacity: 1 !important;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.bracket-svg path.winner-path {
+  stroke: var(--brand) !important;
+  stroke-width: 3.5 !important;
+  filter: drop-shadow(0 0 3px rgba(200, 255, 61, 0.45));
+}
+@media (max-width: 480px) {
+  .bracket-svg path { stroke-width: 2.5 !important; }
+  .bracket-svg path.winner-path { stroke-width: 3 !important; }
 }
 
 /* Espaço vertical entre cards de matches no R1 */

@@ -90,7 +90,7 @@ function renderMatch(match) {
 
   const roundLabel = ROUND_LABELS[match.round] || match.round;
   return `
-    <div class="bk-match" data-match-id="${match.id}">
+    <div class="bk-match" data-match-id="${match.id}"${match.winner ? ' data-has-winner="true"' : ''}>
       <div class="bk-match-head">
         <div class="bk-trophy">#${match.n} • ${roundLabel}</div>
         <div class="bk-options">${headerCount}</div>
@@ -221,23 +221,28 @@ function drawConnectors(container) {
 
         const midX = x1 + (xt - x1) / 2;
 
+        const m1Won = m1.dataset.hasWinner === 'true';
+        const m2Won = m2 && m2.dataset.hasWinner === 'true';
+        const wcls = w => w ? ' class="winner-path"' : '';
+
         // Linha do match 1 ao mid
-        paths.push(`M ${x1} ${y1} H ${midX}`);
+        paths.push(`<path d="M ${x1} ${y1} H ${midX}"${wcls(m1Won)}/>`);
 
         if (r2) {
           const y2 = r2.top + r2.height / 2 - innerRect.top;
           // Linha do match 2 ao mid
-          paths.push(`M ${x1} ${y2} H ${midX}`);
-          // Linha vertical conectando os dois
-          paths.push(`M ${midX} ${y1} V ${y2}`);
+          paths.push(`<path d="M ${x1} ${y2} H ${midX}"${wcls(m2Won)}/>`);
+          // Linha vertical conectando os dois (sem destaque)
+          paths.push(`<path d="M ${midX} ${y1} V ${y2}"/>`);
         }
 
-        // Linha do mid até o target
-        paths.push(`M ${midX} ${yt} H ${xt}`);
+        // Linha do mid até o target — só destaca se ALGUM dos predecessores tem winner
+        // (pois no destino algum jogador já chegou)
+        paths.push(`<path d="M ${midX} ${yt} H ${xt}"${wcls(m1Won || m2Won)}/>`);
       }
     }
 
-    svg.innerHTML = paths.map(p => `<path d="${p}"/>`).join('');
+    svg.innerHTML = paths.join('');
   });
 }
 
