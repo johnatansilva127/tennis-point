@@ -147,8 +147,20 @@ function renderBracket(bracket, container) {
     </div>
   `;
 
-  // Layout — calcular posições
-  requestAnimationFrame(() => layoutBracket(container));
+  // Layout SÍNCRONO: leitura de scrollWidth/getBoundingClientRect já força
+  // reflow, então não precisamos de RAF. RAF é flaky em iframes throttled
+  // (preview, background tabs, mobile com page hidden) e era a causa real
+  // dos conectores não aparecerem.
+  layoutBracket(container);
+  // Re-tenta uma vez após font/paint ter settled, pra cobrir casos onde
+  // primeira medição saiu com scrollWidth=0 (raro, mas blindagem).
+  if (container.querySelector('#bracket-inner')?.scrollWidth === 0) {
+    setTimeout(() => layoutBracket(container), 80);
+  }
+
+  // Observers: redesenha conectores quando layout muda (resize, fontes carregam,
+  // edit mode muda matches, etc). Idempotente — substitui observers anteriores.
+  attachBracketObservers(container);
 }
 
 function layoutBracket(container) {
@@ -178,76 +190,107 @@ function layoutBracket(container) {
     round.style.flexDirection = 'column';
   });
 
-  // Desenhar conectores SVG
+  // Desenhar conectores SVG (síncrono, agora que dimensões estão certas)
   drawConnectors(container);
 }
 
+/* Síncrono: assume que o caller já garantiu que layout está settled.
+   Calcula bounding rects de cada match card e desenha paths SVG conectando
+   match[mi*2], match[mi*2+1] no round atual → match[mi] no round seguinte. */
 function drawConnectors(container) {
   const inner = container.querySelector('#bracket-inner');
   const svg = container.querySelector('#bracket-svg');
   if (!inner || !svg) return;
 
-  // Aguardar layout
-  requestAnimationFrame(() => {
-    const innerRect = inner.getBoundingClientRect();
-    const w = inner.scrollWidth;
-    const h = inner.scrollHeight;
-    svg.setAttribute('width', w);
-    svg.setAttribute('height', h);
-    svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+  const innerRect = inner.getBoundingClientRect();
+  const w = inner.scrollWidth;
+  const h = inner.scrollHeight;
+  if (w === 0 || h === 0) return; // ainda não pronto, observer vai chamar de novo
 
-    const rounds = inner.querySelectorAll('.bracket-round');
-    const paths = [];
+  svg.setAttribute('width', w);
+  svg.setAttribute('height', h);
+  svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
 
-    for (let ri = 0; ri < rounds.length - 1; ri++) {
-      const currentMatches = rounds[ri].querySelectorAll('.bk-match');
-      const nextMatches = rounds[ri + 1].querySelectorAll('.bk-match');
+  const rounds = inner.querySelectorAll('.bracket-round');
+  const paths = [];
 
-      for (let mi = 0; mi < nextMatches.length; mi++) {
-        const m1 = currentMatches[mi * 2];
-        const m2 = currentMatches[mi * 2 + 1];
-        const target = nextMatches[mi];
+  for (let ri = 0; ri < rounds.length - 1; ri++) {
+    const currentMatches = rounds[ri].querySelectorAll('.bk-match');
+    const nextMatches = rounds[ri + 1].querySelectorAll('.bk-match');
 
-        if (!m1 || !target) continue;
+    for (let mi = 0; mi < nextMatches.length; mi++) {
+      const m1 = currentMatches[mi * 2];
+      const m2 = currentMatches[mi * 2 + 1];
+      const target = nextMatches[mi];
 
-        const r1 = m1.getBoundingClientRect();
-        const r2 = m2 ? m2.getBoundingClientRect() : null;
-        const rt = target.getBoundingClientRect();
+      if (!m1 || !target) continue;
 
-        const x1 = r1.right - innerRect.left;
-        const y1 = r1.top + r1.height / 2 - innerRect.top;
-        const xt = rt.left - innerRect.left;
-        const yt = rt.top + rt.height / 2 - innerRect.top;
+      const r1 = m1.getBoundingClientRect();
+      const r2 = m2 ? m2.getBoundingClientRect() : null;
+      const rt = target.getBoundingClientRect();
 
-        const midX = x1 + (xt - x1) / 2;
+      const x1 = r1.right - innerRect.left;
+      const y1 = r1.top + r1.height / 2 - innerRect.top;
+      const xt = rt.left - innerRect.left;
+      const yt = rt.top + rt.height / 2 - innerRect.top;
 
-        const m1Won = m1.dataset.hasWinner === 'true';
-        const m2Won = m2 && m2.dataset.hasWinner === 'true';
-        const wcls = w => w ? ' class="winner-path"' : '';
+      const midX = x1 + (xt - x1) / 2;
 
-        // Linha do match 1 ao mid
-        paths.push(`<path d="M ${x1} ${y1} H ${midX}"${wcls(m1Won)}/>`);
+      const m1Won = m1.dataset.hasWinner === 'true';
+      const m2Won = m2 && m2.dataset.hasWinner === 'true';
+      const wcls = won => won ? ' class="winner-path"' : '';
 
-        if (r2) {
-          const y2 = r2.top + r2.height / 2 - innerRect.top;
-          // Linha do match 2 ao mid
-          paths.push(`<path d="M ${x1} ${y2} H ${midX}"${wcls(m2Won)}/>`);
-          // Linha vertical conectando os dois (sem destaque)
-          paths.push(`<path d="M ${midX} ${y1} V ${y2}"/>`);
-        }
+      paths.push(`<path d="M ${x1} ${y1} H ${midX}"${wcls(m1Won)}/>`);
 
-        // Linha do mid até o target — só destaca se ALGUM dos predecessores tem winner
-        // (pois no destino algum jogador já chegou)
-        paths.push(`<path d="M ${midX} ${yt} H ${xt}"${wcls(m1Won || m2Won)}/>`);
+      if (r2) {
+        const y2 = r2.top + r2.height / 2 - innerRect.top;
+        paths.push(`<path d="M ${x1} ${y2} H ${midX}"${wcls(m2Won)}/>`);
+        paths.push(`<path d="M ${midX} ${y1} V ${y2}"/>`);
       }
-    }
 
-    svg.innerHTML = paths.join('');
-  });
+      paths.push(`<path d="M ${midX} ${yt} H ${xt}"${wcls(m1Won || m2Won)}/>`);
+    }
+  }
+
+  svg.innerHTML = paths.join('');
 }
 
-/* Re-layout em resize */
+/* ResizeObserver + MutationObserver: redesenha sempre que dimensões ou DOM
+   dos matches mudam (resize de janela, fontes carregando, admin edit mode
+   adicionando/removendo matches, drag-drop trocando jogadores). */
+const _bracketObservers = new WeakMap();
+function attachBracketObservers(container) {
+  const inner = container.querySelector('#bracket-inner');
+  if (!inner) return;
+
+  // Limpa observers anteriores (renderBracket pode ser chamado de novo)
+  const prev = _bracketObservers.get(container);
+  if (prev) {
+    prev.ro?.disconnect();
+    prev.mo?.disconnect();
+  }
+
+  // Throttle simples via setTimeout (não usa RAF — flaky em iframes/background)
+  let scheduled = null;
+  const redraw = () => {
+    if (scheduled) return;
+    scheduled = setTimeout(() => {
+      scheduled = null;
+      const live = container.querySelector('#bracket-inner');
+      if (live) layoutBracket(container);
+    }, 16); // ~1 frame
+  };
+
+  const ro = new ResizeObserver(redraw);
+  ro.observe(inner);
+
+  const mo = new MutationObserver(redraw);
+  mo.observe(inner, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-has-winner'] });
+
+  _bracketObservers.set(container, { ro, mo });
+}
+
+/* Re-layout em resize de janela (fallback além do ResizeObserver) */
 window.addEventListener('resize', () => {
-  const containers = document.querySelectorAll('.bracket-scroll');
-  containers.forEach(c => layoutBracket(c));
+  document.querySelectorAll('.bracket-scroll').forEach(c => layoutBracket(c));
 });
