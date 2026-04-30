@@ -713,8 +713,31 @@ function bindTournament() {
       } else {
         bindBracketAdminClicks();
       }
+      bindBracketSortActions();
     }
   }
+}
+
+/* Atalhos de sorteio na tela do torneio (admin only) */
+function bindBracketSortActions() {
+  if (STATE.user?.role !== 'admin') return;
+  document.querySelectorAll('[data-action="goto-draw"]').forEach(b => {
+    b.addEventListener('click', () => {
+      currentDrawCategory = currentBracketCategory;
+      drawState = { players: [], seeds: [] };
+      navigate('admin-draw');
+    });
+  });
+  document.querySelectorAll('[data-action="resort-bracket"]').forEach(b => {
+    b.addEventListener('click', () => {
+      const cat = STATE.categories.find(c => c.id === currentBracketCategory);
+      const ok = confirm('Re-sortear a chave de ' + (cat?.name || 'esta categoria') + '? A chave atual sera substituida.');
+      if (!ok) return;
+      currentDrawCategory = currentBracketCategory;
+      drawState = { players: [], seeds: [] };
+      navigate('admin-draw');
+    });
+  });
 }
 
 /* Edit mode: cada slot p1/p2 abre modal pra trocar jogador.
