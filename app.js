@@ -738,6 +738,18 @@ function bindBracketSortActions() {
       navigate('admin-draw');
     });
   });
+  // Footer do match clicavel: abre editor (scores/winner/data/hora) em qualquer modo
+  document.querySelectorAll('[data-action="edit-match-details"]').forEach(el => {
+    const open = (e) => {
+      e.stopPropagation();
+      const matchId = el.dataset.matchId;
+      if (matchId) openMatchEditor(matchId);
+    };
+    el.addEventListener('click', open);
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(e); }
+    });
+  });
 }
 
 /* Edit mode: cada slot p1/p2 abre modal pra trocar jogador.

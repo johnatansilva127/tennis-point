@@ -76,7 +76,7 @@ function renderPlayerRow(memberId, scores, isWinner, isBye, idx) {
   `;
 }
 
-function renderMatch(match, categoryLabel) {
+function renderMatch(match, categoryLabel, isAdmin) {
   const w = match.winner;
   const p1IsWinner = w ? (w === match.p1) : null;
   const p2IsWinner = w ? (w === match.p2) : null;
@@ -125,10 +125,14 @@ function renderMatch(match, categoryLabel) {
       </div>
       ${renderPlayerRow(match.p1, match.scores, p1IsWinner, match.isBye, 0)}
       ${renderPlayerRow(match.p2, match.scores, p2IsWinner, match.isBye, 1)}
-      ${dateStr ? `
-        <div class="bk-match-foot">
-          <span class="bk-match-date">${dateStr}</span>
-          <a class="bk-h2h" role="button" tabindex="0">H2H</a>
+      ${(dateStr || isAdmin) ? `
+        <div class="bk-match-foot${isAdmin ? ' is-admin-clickable' : ''}" ${isAdmin ? `data-action="edit-match-details" data-match-id="${match.id}" role="button" tabindex="0"` : ''}>
+          <span class="bk-match-date">${dateStr || (isAdmin ? '+ definir data e hora' : '')}</span>
+          ${isAdmin ? `<span class="bk-edit-pencil" aria-label="Editar match">
+            <svg viewBox="0 0 14 14" width="11" height="11" fill="none" aria-hidden="true">
+              <path d="M2 12l1.5-4 6.5-6.5a1.5 1.5 0 1 1 2 2L5.5 10 1 11.5l1-2.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+            </svg>
+          </span>` : `<a class="bk-h2h" role="button" tabindex="0">H2H</a>`}
         </div>
       ` : ''}
     </div>
@@ -195,7 +199,7 @@ function renderBracket(bracket, container) {
     const matches = bracket.matches[roundName] || [];
     return `
       <div class="bracket-round" data-round="${roundName}" data-round-idx="${ri}">
-        ${matches.map(m => renderMatch(m, catLabel)).join('')}
+        ${matches.map(m => renderMatch(m, catLabel, isAdmin)).join('')}
       </div>
     `;
   }).join('');

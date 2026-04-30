@@ -1259,6 +1259,46 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   box-shadow: 0 0 0 2px rgba(200,255,61,0.4);
 }
 
+/* Footer clicável pra admin (v4.10.5): abre editor com scores/winner/data/hora */
+.bk-match-foot.is-admin-clickable {
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
+}
+.bk-match-foot.is-admin-clickable:hover {
+  background: rgba(200,255,61,0.06);
+  color: var(--bk-text-secondary);
+}
+.bk-match-foot.is-admin-clickable:hover .bk-match-date {
+  color: var(--bk-text);
+}
+.bk-match-foot.is-admin-clickable:hover .bk-edit-pencil {
+  color: var(--bk-score-winner-text, #d6ff5c);
+}
+.bk-match-foot.is-admin-clickable:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px rgba(200,255,61,0.4);
+}
+.bk-edit-pencil {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background: rgba(255,255,255,0.04);
+  color: rgba(242,242,244,0.55);
+  transition: background 150ms ease, color 150ms ease;
+}
+/* Quando ainda não tem data definida, mostra a sugestão de admin com cor lima sutil */
+.bk-match-foot.is-admin-clickable .bk-match-date:only-child,
+.bk-match-foot.is-admin-clickable .bk-match-date:first-child:not(:only-child) {
+  /* nada extra — herda do contexto */
+}
+/* Sugestão "+ definir data e hora" em cor sutil */
+.bk-match-foot.is-admin-clickable .bk-match-date {
+  font-style: normal;
+}
+
 /* ============ CONECTORES SVG ============
    width/height são definidos via JS em pixels (matching scrollWidth/Height
    do .bracket), pra cobrir TODA a árvore inclusive o que está fora do
