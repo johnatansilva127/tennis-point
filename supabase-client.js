@@ -160,8 +160,90 @@ const Brackets = {
       .single();
     if (error) throw error;
     return data;
+  },
+
+  async deleteByCategory(tournamentId, categoryId) {
+    const { error } = await sb
+      .from('brackets')
+      .delete()
+      .eq('tournament_id', tournamentId)
+      .eq('category_id', categoryId);
+    if (error) throw error;
   }
 };
+
+// =========================================================
+// ADMIN MUTATIONS — CRUD de categorias, brackets e jogadores
+// Requer role=admin no profile (RLS permite via policies *_admin_all).
+// =========================================================
+const AdminMutations = {
+  /* Categorias */
+  async createCategory({ id, name, icon, order_index }) {
+    const { data, error } = await sb
+      .from('categories')
+      .insert({ id, name, icon, order_index })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+  async updateCategory(id, patch) {
+    const { data, error } = await sb
+      .from('categories')
+      .update(patch)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+  async deleteCategory(id) {
+    const { error } = await sb
+      .from('categories')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+  },
+
+  /* Bracket data — operações que modificam o JSONB */
+  async createEmptyBracket(tournamentId, categoryId, size) {
+    // Gera estrutura vazia: rounds + matches com slots null
+    const data = _buildEmptyBracketData(size);
+    const { data: row, error } = await sb
+      .from('brackets')
+      .insert({ tournament_id: tournamentId, category_id: categoryId, drawn: false, data })
+      .select()
+      .single();
+    if (error) throw error;
+    return row;
+  },
+};
+
+/* Helper: gera estrutura JSONB vazia pra um bracket de tamanho N (16/32/64) */
+function _buildEmptyBracketData(size) {
+  const rounds = [];
+  if (size >= 64) rounds.push('R64');
+  if (size >= 32) rounds.push('R32');
+  if (size >= 16) rounds.push('R16');
+  if (size >= 8)  rounds.push('QF');
+  if (size >= 4)  rounds.push('SF');
+  rounds.push('F');
+  const matches = {};
+  let n = 1;
+  rounds.forEach((r, ri) => {
+    const count = size / Math.pow(2, ri + 1);
+    matches[r] = [];
+    for (let i = 0; i < count; i++) {
+      matches[r].push({
+        id: `m-${r.toLowerCase()}-${n}`, n, round: r,
+        p1: null, p2: null, scores: [], winner: null,
+        isBye: false, walkover_reason: null, date: null, time: null,
+      });
+      n++;
+    }
+  });
+  return { rounds, matches, drawn: false, publishedAt: null, entries: [] };
+}
 
 // =========================================================
 // MATCHES
@@ -340,4 +422,4 @@ const Realtime = {
 };
 
 // Expõe tudo globalmente pro app.js usar
-window.TP = { sb, Auth, Profiles, Categories, Tournaments, Brackets, Matches, Courts, Bookings, Notifications, Realtime };
+window.TP = { sb, Auth, Profiles, Categories, Tournaments, Brackets, Matches, Courts, Bookings, Notifications, Realtime, AdminMutations };

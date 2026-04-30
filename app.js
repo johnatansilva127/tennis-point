@@ -7,6 +7,7 @@ let currentTournamentTab = 'chave';
 let currentBracketCategory = 'cat-5a';
 let currentDrawCategory = null;
 let drawState = { players: [], seeds: [] };
+let bracketEditMode = false;          // toggle global modo edição de chave (admin)
 
 /* -------- Init -------- */
 document.addEventListener('DOMContentLoaded', async () => {
@@ -347,6 +348,14 @@ function navigate(screen) {
     case 'admin-members':    main.innerHTML = renderAdminMembers();    bindAdminMembers();    break;
     case 'admin-courts':     main.innerHTML = renderAdminCourts();     bindAdminCourts();     break;
     case 'admin-draw':       main.innerHTML = renderAdminDraw();       bindAdminDraw();       break;
+    case 'admin-categories': main.innerHTML = renderAdminCategories(); bindAdminCategories(); break;
+    case 'admin-players':    main.innerHTML = renderAdminPlayers();    bindAdminPlayers();    break;
+    case 'admin-bracket-edit':
+      // Atalho: ativa edit mode e navega pro bracket
+      bracketEditMode = true;
+      currentTournamentTab = 'chave';
+      navigate('tournament');
+      return;
     case 'settings':         main.innerHTML = renderSettings();        bindSettings();        break;
     case 'notifications':    main.innerHTML = renderNotifications();   markNotifsRead();      break;
     case 'help':             main.innerHTML = renderHelp();                                   break;
@@ -490,7 +499,17 @@ function renderTournament() {
       </div>
 
       ${currentTournamentTab === 'sobre'    ? renderTournamentAbout() : ''}
-      ${currentTournamentTab === 'chave'    ? `<div class="bracket-scroll" id="bracket-host"></div>` : ''}
+      ${currentTournamentTab === 'chave'    ? `
+        ${STATE.user?.role === 'admin' ? `
+          <div class="edit-mode-toggle">
+            <label class="switch-row">
+              <span>✏️ Modo Edição (clique nos slots pra trocar jogador)</span>
+              <span class="switch ${bracketEditMode ? 'on' : ''}" data-toggle-edit-mode></span>
+            </label>
+          </div>
+        ` : ''}
+        <div class="bracket-scroll ${bracketEditMode ? 'edit-mode' : ''}" id="bracket-host"></div>
+      ` : ''}
       ${currentTournamentTab === 'horarios' ? renderTournamentSchedule() : ''}
       ${currentTournamentTab === 'jogos'    ? renderTournamentGames() : ''}
       ${currentTournamentTab === 'inscritos'? renderTournamentPlayers(currentBracketCategory) : ''}
@@ -583,13 +602,115 @@ function bindTournament() {
   document.querySelectorAll('.bracket-cat-chips .chip').forEach(b => {
     b.addEventListener('click', () => { currentBracketCategory = b.dataset.cat; navigate('tournament'); });
   });
+  // Toggle Modo Edição (admin)
+  document.querySelector('[data-toggle-edit-mode]')?.addEventListener('click', () => {
+    bracketEditMode = !bracketEditMode;
+    navigate('tournament');
+  });
   if (currentTournamentTab === 'chave') {
     const host = document.getElementById('bracket-host');
     if (host) {
       renderBracket(STATE.brackets[currentBracketCategory], host);
-      bindBracketAdminClicks();
+      if (bracketEditMode && STATE.user?.role === 'admin') {
+        bindBracketEditModeClicks();
+      } else {
+        bindBracketAdminClicks();
+      }
     }
   }
+}
+
+/* Edit mode: cada slot p1/p2 abre modal pra trocar jogador. */
+function bindBracketEditModeClicks() {
+  if (!STATE.user || STATE.user.role !== 'admin') return;
+  const rows = document.querySelectorAll('.bk-player-row');
+  rows.forEach(row => {
+    const card = row.closest('.bk-match');
+    if (!card) return;
+    const matchId = card.dataset.matchId;
+    // Identifica se é p1 ou p2: top row ou bot row
+    const allRows = card.querySelectorAll('.bk-player-row');
+    const slotKey = (allRows[0] === row) ? 'p1' : 'p2';
+    row.classList.add('edit-slot');
+    row.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openSlotEditor(matchId, slotKey);
+    });
+  });
+}
+
+function openSlotEditor(matchId, slotKey) {
+  const catId = currentBracketCategory;
+  const found = findMatchInBracket(catId, matchId);
+  if (!found) { toast('Match não encontrado', 'error'); return; }
+  const { match } = found;
+  const currentId = match[slotKey];
+  const currentName = currentId ? memberName(currentId) : '(vazio / BYE)';
+
+  // Lista todos os entries dessa categoria (do tournamentPlayers)
+  const entries = (STATE.tournamentPlayers || [])
+    .filter(p => p.categoryKey === catId)
+    .sort((a,b) => a.name.localeCompare(b.name, 'pt-BR'));
+
+  const optionsHTML = entries.map(p => `
+    <option value="${p.id}" ${p.id === currentId ? 'selected' : ''}>${p.name}</option>
+  `).join('');
+
+  openModal({
+    title: '🔄 Editar slot',
+    sub: `Match #${match.n} · ${ROUND_LABELS[match.round] || match.round} · slot ${slotKey === 'p1' ? 'TOPO' : 'BAIXO'}`,
+    body: `
+      <p class="muted" style="font-size:13px;margin-bottom:12px">Atual: <strong>${currentName}</strong></p>
+      <div class="field">
+        <label>Trocar por:</label>
+        <select id="slot-new-entry">
+          <option value="">— (Vazio / BYE)</option>
+          ${optionsHTML}
+        </select>
+      </div>
+      <p class="muted" style="font-size:12px">Se marcar BYE, o oponente avança automaticamente pro próximo round (se vaga vazia).</p>
+    `,
+    actions: [
+      { label: 'Cancelar', class: 'btn-secondary', onClick: closeModal },
+      { label: 'Salvar', class: 'btn-primary', onClick: () => saveSlotEdit(catId, matchId, slotKey) },
+    ],
+  });
+}
+
+async function saveSlotEdit(catId, matchId, slotKey) {
+  const found = findMatchInBracket(catId, matchId);
+  if (!found) return;
+  const { match } = found;
+  const newId = document.getElementById('slot-new-entry').value || null;
+  match[slotKey] = newId;
+
+  // Se ficou BYE (um slot null e outro com player), winner = o que tem player
+  const otherKey = slotKey === 'p1' ? 'p2' : 'p1';
+  if (newId === null && match[otherKey]) {
+    match.winner = match[otherKey];
+    match.isBye = true;
+    autoAdvanceWinnerInBracket(STATE.brackets[catId], match);
+  } else if (match.p1 && match.p2 && match.isBye) {
+    // Saiu de bye porque agora ambos têm jogador
+    match.isBye = false;
+    match.winner = null;
+  }
+
+  closeModal();
+  saveState();
+
+  try {
+    if (STATE._activeTournamentId) {
+      await TP.Brackets.updateData(STATE._activeTournamentId, catId, STATE.brackets[catId]);
+      toast('Slot atualizado ✅', 'success');
+    } else {
+      toast('Salvo localmente (sem tournament_id)', 'info');
+    }
+  } catch (e) {
+    toast('Erro: ' + (e.message || 'falha no Supabase'), 'error');
+  }
+
+  navigate('tournament');
 }
 
 /* Admin: clicar num match abre editor pra setar score/winner.
@@ -942,7 +1063,14 @@ function renderAdmin() {
       <div class="stat-card"><div class="stat-num">${STATE.courts.length}</div><div class="stat-lbl">Quadras</div></div>
     </div>
 
-    <div class="section-title">Ações rápidas</div>
+    <div class="section-title">⚙️ Gerenciar Torneio</div>
+    <div class="action-grid">
+      <div class="action-card" data-screen="admin-categories"><div class="ai">🗂️</div><div class="at">Categorias</div><div class="as">Criar / editar / excluir</div></div>
+      <div class="action-card" data-screen="admin-bracket-edit"><div class="ai">🎯</div><div class="at">Editar Chaves</div><div class="as">Trocar slots / BYE</div></div>
+      <div class="action-card" data-screen="admin-players"><div class="ai">🎾</div><div class="at">Jogadores</div><div class="as">CRUD do registry</div></div>
+    </div>
+
+    <div class="section-title">Outras ações</div>
     <div class="action-grid">
       <div class="action-card" data-screen="admin-draw"><div class="ai">🎲</div><div class="at">Sorteio de chaves</div><div class="as">Montar brackets</div></div>
       <div class="action-card" data-screen="admin-tournament"><div class="ai">🏆</div><div class="at">Gerenciar torneio</div><div class="as">Categorias e jogos</div></div>
@@ -1656,6 +1784,395 @@ function renderHelp() {
       <p class="muted" style="font-size:14px">Tennis Point v4.0 — ${new Date().toLocaleDateString('pt-BR')}</p>
     </div>
   `;
+}
+
+/* ==================================================
+   ADMIN: CRUD de CATEGORIAS
+   ================================================== */
+function renderAdminCategories() {
+  const cats = STATE.categories || [];
+  return `
+    <div class="row-between mb-md">
+      <button class="btn-ghost" data-action="back-admin">← Categorias</button>
+      <button class="btn-primary" data-action="new-cat" style="padding:8px 14px;font-size:13px">+ Nova categoria</button>
+    </div>
+    <div class="muted mb-sm" style="font-size:13px">Cada categoria tem uma chave (bracket) associada. Excluir categoria apaga a chave também.</div>
+    ${cats.length ? cats.map(c => {
+      const br = STATE.brackets?.[c.id];
+      const entries = (STATE.tournamentPlayers || []).filter(p => p.categoryKey === c.id).length;
+      const r1 = br?.rounds?.[0] || '—';
+      return `
+        <div class="list-row" data-cat-id="${c.id}">
+          <div class="avatar lg" style="background:var(--av-blue);font-size:18px">${c.icon || '🎾'}</div>
+          <div class="lr-info">
+            <div class="lr-title">${c.name}</div>
+            <div class="lr-meta">${entries} jogadores · 1ª rodada: ${r1} · ID: <code>${c.id}</code></div>
+          </div>
+          <button class="btn-ghost" data-edit-cat="${c.id}" style="padding:6px 10px;font-size:12px">✏️</button>
+          <button class="btn-ghost" data-delete-cat="${c.id}" style="padding:6px 10px;font-size:12px;color:var(--red)">🗑️</button>
+        </div>
+      `;
+    }).join('') : '<div class="empty-state">Nenhuma categoria. Crie a primeira.</div>'}
+  `;
+}
+
+function bindAdminCategories() {
+  document.querySelector('[data-action="back-admin"]')?.addEventListener('click', () => navigate('admin'));
+  document.querySelector('[data-action="new-cat"]')?.addEventListener('click', modalNewCategoryFull);
+  document.querySelectorAll('[data-edit-cat]').forEach(b => {
+    b.addEventListener('click', () => modalEditCategoryFull(b.dataset.editCat));
+  });
+  document.querySelectorAll('[data-delete-cat]').forEach(b => {
+    b.addEventListener('click', () => modalDeleteCategory(b.dataset.deleteCat));
+  });
+}
+
+function _slugifyId(name) {
+  return 'cat-' + name.normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function modalNewCategoryFull() {
+  openModal({
+    title: '➕ Nova categoria',
+    body: `
+      <div class="field"><label>Nome</label><input id="cat-name" placeholder="Ex: Cat. D"></div>
+      <div class="field"><label>Ícone (emoji)</label><input id="cat-icon" placeholder="🎾" maxlength="3" value="🎾"></div>
+      <div class="field"><label>Tamanho da chave</label>
+        <select id="cat-size">
+          <option value="16">16 jogadores (R16 → F)</option>
+          <option value="32">32 jogadores (R32 → F)</option>
+          <option value="64" selected>64 jogadores (R64 → F)</option>
+        </select>
+      </div>
+      <div class="field"><label>Ordem</label><input id="cat-order" type="number" min="0" max="99" value="${(STATE.categories?.length || 0)}"></div>
+      <p class="muted" style="font-size:12px">ID será auto-gerado a partir do nome. Bracket vazio será criado automaticamente.</p>
+    `,
+    actions: [
+      { label: 'Cancelar', class: 'btn-secondary', onClick: closeModal },
+      { label: 'Criar', class: 'btn-primary', onClick: async () => {
+        const name = document.getElementById('cat-name').value.trim();
+        if (!name) { toast('Informe o nome', 'error'); return; }
+        const id = _slugifyId(name);
+        if (STATE.categories?.find(c => c.id === id)) { toast('Já existe categoria com esse nome/id', 'error'); return; }
+        const icon = document.getElementById('cat-icon').value.trim() || '🎾';
+        const size = parseInt(document.getElementById('cat-size').value, 10);
+        const order = parseInt(document.getElementById('cat-order').value, 10) || 0;
+        closeModal();
+        try {
+          await TP.AdminMutations.createCategory({ id, name, icon, order_index: order });
+          if (STATE._activeTournamentId) {
+            await TP.AdminMutations.createEmptyBracket(STATE._activeTournamentId, id, size);
+          }
+          STATE.categories.push({ id, name, icon, color: '--av-blue' });
+          STATE.brackets[id] = STATE.brackets[id] || { rounds: [], matches: {}, drawn: false, entries: [] };
+          toast(`Categoria "${name}" criada ✅`, 'success');
+          await loadAppData();
+          navigate('admin-categories');
+        } catch (e) {
+          toast('Erro: ' + (e.message || 'falha ao criar'), 'error');
+        }
+      }},
+    ],
+  });
+}
+
+function modalEditCategoryFull(catId) {
+  const c = STATE.categories.find(x => x.id === catId);
+  if (!c) return;
+  openModal({
+    title: '✏️ Editar categoria',
+    body: `
+      <div class="field"><label>Nome</label><input id="cat-name" value="${c.name || ''}"></div>
+      <div class="field"><label>Ícone</label><input id="cat-icon" value="${c.icon || '🎾'}" maxlength="3"></div>
+      <div class="muted" style="font-size:12px">ID e tamanho não podem ser mudados após criação (causaria estrago no bracket).</div>
+    `,
+    actions: [
+      { label: 'Cancelar', class: 'btn-secondary', onClick: closeModal },
+      { label: 'Salvar', class: 'btn-primary', onClick: async () => {
+        const name = document.getElementById('cat-name').value.trim();
+        const icon = document.getElementById('cat-icon').value.trim() || '🎾';
+        if (!name) { toast('Nome obrigatório', 'error'); return; }
+        closeModal();
+        try {
+          await TP.AdminMutations.updateCategory(catId, { name, icon });
+          c.name = name; c.icon = icon;
+          toast('Categoria atualizada ✅', 'success');
+          navigate('admin-categories');
+        } catch (e) {
+          toast('Erro: ' + (e.message || 'falha'), 'error');
+        }
+      }},
+    ],
+  });
+}
+
+function modalDeleteCategory(catId) {
+  const c = STATE.categories.find(x => x.id === catId);
+  if (!c) return;
+  openModal({
+    title: '🗑️ Excluir categoria',
+    sub: c.name,
+    body: `
+      <p class="muted" style="font-size:14px;margin-bottom:12px">Isso vai apagar a chave inteira e todas as partidas registradas. <strong>Não dá pra desfazer.</strong></p>
+      <div class="field"><label>Digite o nome <strong>${c.name}</strong> pra confirmar:</label><input id="cat-confirm" placeholder="${c.name}"></div>
+    `,
+    actions: [
+      { label: 'Cancelar', class: 'btn-secondary', onClick: closeModal },
+      { label: 'EXCLUIR', class: 'btn-danger', onClick: async () => {
+        const typed = document.getElementById('cat-confirm').value.trim();
+        if (typed !== c.name) { toast('Nome não confere', 'error'); return; }
+        closeModal();
+        try {
+          // Apaga bracket primeiro (FK), depois categoria
+          if (STATE._activeTournamentId) {
+            await TP.Brackets.deleteByCategory(STATE._activeTournamentId, catId);
+          }
+          await TP.AdminMutations.deleteCategory(catId);
+          STATE.categories = STATE.categories.filter(x => x.id !== catId);
+          delete STATE.brackets[catId];
+          toast(`"${c.name}" excluída`, 'success');
+          navigate('admin-categories');
+        } catch (e) {
+          toast('Erro: ' + (e.message || 'falha'), 'error');
+        }
+      }},
+    ],
+  });
+}
+
+/* ==================================================
+   ADMIN: CRUD de JOGADORES
+   ================================================== */
+function _uniquePlayers() {
+  // Dedupe por email primário (primeiro do accountEmails)
+  const byEmail = {};
+  (STATE.tournamentPlayers || []).forEach(p => {
+    const email = (p.accountEmails && p.accountEmails[0]) || null;
+    if (!email) return;
+    if (!byEmail[email]) {
+      byEmail[email] = { email, name: p.name, categories: new Set(), entryIds: [] };
+    }
+    byEmail[email].categories.add(p.categoryKey);
+    byEmail[email].entryIds.push(p.id);
+  });
+  return Object.values(byEmail).map(p => ({
+    email: p.email, name: p.name,
+    categories: [...p.categories],
+    entryIds: p.entryIds,
+  })).sort((a,b) => a.name.localeCompare(b.name, 'pt-BR'));
+}
+
+function renderAdminPlayers() {
+  const players = _uniquePlayers();
+  const catLabel = id => STATE.categories.find(c => c.id === id)?.name || id;
+  return `
+    <div class="row-between mb-md">
+      <button class="btn-ghost" data-action="back-admin">← Jogadores</button>
+      <button class="btn-primary" data-action="new-player" style="padding:8px 14px;font-size:13px">+ Novo</button>
+    </div>
+    <div class="field mb-sm">
+      <input id="player-search" placeholder="🔍 Buscar por nome ou email..." style="border-radius:12px">
+    </div>
+    <div class="muted mb-sm" style="font-size:12px">${players.length} jogadores únicos. Adicionar/remover entries do bracket — auth.users separadamente (admin SQL).</div>
+    <div id="players-list">
+      ${players.length ? players.map(p => `
+        <div class="list-row" data-player-email="${p.email}">
+          <div class="avatar lg" style="background:${avatarColor(p.name)}">${initials(p.name)}</div>
+          <div class="lr-info">
+            <div class="lr-title">${p.name}</div>
+            <div class="lr-meta">${p.email} · ${p.categories.map(catLabel).join(', ') || '—'}</div>
+          </div>
+          <button class="btn-ghost" data-edit-player="${p.email}" style="padding:6px 10px;font-size:12px">✏️</button>
+          <button class="btn-ghost" data-delete-player="${p.email}" style="padding:6px 10px;font-size:12px;color:var(--red)">🗑️</button>
+        </div>
+      `).join('') : '<div class="empty-state">Nenhum jogador.</div>'}
+    </div>
+  `;
+}
+
+function bindAdminPlayers() {
+  document.querySelector('[data-action="back-admin"]')?.addEventListener('click', () => navigate('admin'));
+  document.querySelector('[data-action="new-player"]')?.addEventListener('click', modalNewPlayer);
+  document.querySelectorAll('[data-edit-player]').forEach(b => {
+    b.addEventListener('click', () => modalEditPlayer(b.dataset.editPlayer));
+  });
+  document.querySelectorAll('[data-delete-player]').forEach(b => {
+    b.addEventListener('click', () => modalDeletePlayer(b.dataset.deletePlayer));
+  });
+  document.getElementById('player-search')?.addEventListener('input', e => {
+    const q = e.target.value.toLowerCase();
+    document.querySelectorAll('#players-list .list-row').forEach(row => {
+      const text = row.textContent.toLowerCase();
+      row.style.display = text.includes(q) ? '' : 'none';
+    });
+  });
+}
+
+function _emailFromName(name) {
+  return name.normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .toLowerCase().replace(/[^a-z0-9]/g,'') + '@tennispointt.com.br';
+}
+
+function modalNewPlayer() {
+  const cats = STATE.categories || [];
+  const catCheckboxes = cats.map(c => `
+    <label style="display:flex;align-items:center;gap:8px;padding:6px 0">
+      <input type="checkbox" data-new-player-cat="${c.id}"> ${c.icon || '🎾'} ${c.name}
+    </label>
+  `).join('');
+  openModal({
+    title: '➕ Novo jogador',
+    body: `
+      <div class="field"><label>Nome</label><input id="np-name" placeholder="Ex: João da Silva"></div>
+      <div class="field"><label>E-mail (auto-gerado, editável)</label><input id="np-email" placeholder="joaosilva@tennispointt.com.br"></div>
+      <div class="field"><label>Categorias em que joga:</label>
+        <div style="background:var(--bg-soft);padding:10px;border-radius:10px;max-height:160px;overflow-y:auto">
+          ${catCheckboxes}
+        </div>
+      </div>
+      <p class="muted" style="font-size:11px">⚠️ Conta de login (auth) NÃO é criada automaticamente. Pra ativar login, admin precisa rodar SQL ou usar bulk script.</p>
+    `,
+    actions: [
+      { label: 'Cancelar', class: 'btn-secondary', onClick: closeModal },
+      { label: 'Adicionar', class: 'btn-primary', onClick: async () => {
+        const name = document.getElementById('np-name').value.trim();
+        let email = document.getElementById('np-email').value.trim();
+        if (!name) { toast('Nome obrigatório', 'error'); return; }
+        if (!email) email = _emailFromName(name);
+        const selectedCats = Array.from(document.querySelectorAll('[data-new-player-cat]:checked')).map(el => el.dataset.newPlayerCat);
+        if (!selectedCats.length) { toast('Selecione ao menos 1 categoria', 'error'); return; }
+        closeModal();
+        try {
+          for (const catId of selectedCats) {
+            // Adiciona entry no array entries do bracket data
+            const br = STATE.brackets[catId];
+            if (!br) continue;
+            const entryId = `tp26-${catId.replace(/^cat-/, '')}-${_slugifyId(name).replace(/^cat-/,'')}`;
+            const newEntry = { id: entryId, name, accountEmails: [email] };
+            br.entries = br.entries || [];
+            // Evita duplicado por id
+            if (!br.entries.find(e => e.id === entryId)) br.entries.push(newEntry);
+            // Persiste no Supabase
+            if (STATE._activeTournamentId) {
+              await TP.Brackets.updateData(STATE._activeTournamentId, catId, br);
+            }
+            // Atualiza tournamentPlayers local
+            STATE.tournamentPlayers = STATE.tournamentPlayers || [];
+            if (!STATE.tournamentPlayers.find(p => p.id === entryId)) {
+              STATE.tournamentPlayers.push({ id: entryId, name, categoryKey: catId, accountEmails: [email] });
+            }
+          }
+          toast(`${name} adicionado em ${selectedCats.length} categoria(s) ✅`, 'success');
+          navigate('admin-players');
+        } catch (e) {
+          toast('Erro: ' + (e.message || 'falha'), 'error');
+        }
+      }},
+    ],
+  });
+}
+
+function modalEditPlayer(email) {
+  const player = _uniquePlayers().find(p => p.email === email);
+  if (!player) return;
+  openModal({
+    title: '✏️ Editar jogador',
+    sub: `${player.categories.length} categoria(s)`,
+    body: `
+      <div class="field"><label>Nome</label><input id="ep-name" value="${player.name}"></div>
+      <div class="field"><label>Email</label><input id="ep-email" value="${player.email}"></div>
+      <p class="muted" style="font-size:12px">Mudança de email NÃO altera conta no auth.users (necessário SQL admin).</p>
+    `,
+    actions: [
+      { label: 'Cancelar', class: 'btn-secondary', onClick: closeModal },
+      { label: 'Salvar', class: 'btn-primary', onClick: async () => {
+        const newName = document.getElementById('ep-name').value.trim();
+        const newEmail = document.getElementById('ep-email').value.trim();
+        if (!newName || !newEmail) { toast('Nome e email obrigatórios', 'error'); return; }
+        closeModal();
+        try {
+          // Atualiza todos os entries que tinham aquele email
+          const affectedCats = new Set();
+          (STATE.tournamentPlayers || []).forEach(p => {
+            if ((p.accountEmails || []).includes(email)) {
+              p.name = newName;
+              p.accountEmails = (p.accountEmails || []).map(e => e === email ? newEmail : e);
+              affectedCats.add(p.categoryKey);
+            }
+          });
+          // Atualiza entries dentro do bracket data e persiste
+          for (const catId of affectedCats) {
+            const br = STATE.brackets[catId];
+            if (!br) continue;
+            (br.entries || []).forEach(e => {
+              if ((e.accountEmails || []).includes(email)) {
+                e.name = newName;
+                e.accountEmails = (e.accountEmails || []).map(x => x === email ? newEmail : x);
+              }
+            });
+            if (STATE._activeTournamentId) {
+              await TP.Brackets.updateData(STATE._activeTournamentId, catId, br);
+            }
+          }
+          toast(`${newName} atualizado em ${affectedCats.size} categoria(s) ✅`, 'success');
+          navigate('admin-players');
+        } catch (e) {
+          toast('Erro: ' + (e.message || 'falha'), 'error');
+        }
+      }},
+    ],
+  });
+}
+
+function modalDeletePlayer(email) {
+  const player = _uniquePlayers().find(p => p.email === email);
+  if (!player) return;
+  openModal({
+    title: '🗑️ Remover jogador',
+    sub: player.name,
+    body: `
+      <p class="muted" style="font-size:14px;margin-bottom:12px">Vai remover <strong>${player.name}</strong> de <strong>${player.categories.length}</strong> categoria(s) e dos slots de bracket onde aparece.</p>
+      <p class="muted" style="font-size:12px;margin-bottom:12px">⚠️ A conta auth NÃO é deletada (requer SQL admin).</p>
+      <div class="field"><label>Digite <strong>${player.name}</strong> pra confirmar:</label><input id="dp-confirm" placeholder="${player.name}"></div>
+    `,
+    actions: [
+      { label: 'Cancelar', class: 'btn-secondary', onClick: closeModal },
+      { label: 'REMOVER', class: 'btn-danger', onClick: async () => {
+        const typed = document.getElementById('dp-confirm').value.trim();
+        if (typed !== player.name) { toast('Nome não confere', 'error'); return; }
+        closeModal();
+        try {
+          // Remove entries de tournamentPlayers
+          STATE.tournamentPlayers = (STATE.tournamentPlayers || []).filter(
+            p => !(p.accountEmails || []).includes(email)
+          );
+          // Remove entries de cada bracket data + também limpa slots de matches
+          for (const catId of player.categories) {
+            const br = STATE.brackets[catId];
+            if (!br) continue;
+            br.entries = (br.entries || []).filter(e => !(e.accountEmails || []).includes(email));
+            // Limpa slots em todos os matches que referenciem entryIds removidos
+            const removedIds = new Set(player.entryIds);
+            for (const round of br.rounds || []) {
+              for (const m of (br.matches[round] || [])) {
+                if (removedIds.has(m.p1)) m.p1 = null;
+                if (removedIds.has(m.p2)) m.p2 = null;
+                if (removedIds.has(m.winner)) m.winner = null;
+              }
+            }
+            if (STATE._activeTournamentId) {
+              await TP.Brackets.updateData(STATE._activeTournamentId, catId, br);
+            }
+          }
+          toast(`${player.name} removido ✅`, 'success');
+          navigate('admin-players');
+        } catch (e) {
+          toast('Erro: ' + (e.message || 'falha'), 'error');
+        }
+      }},
+    ],
+  });
 }
 
 /* -------- MODAL -------- */
