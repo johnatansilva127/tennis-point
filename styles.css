@@ -755,21 +755,41 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
    Cores otimizadas para tema escuro mantendo estrutura
    ================================================== */
 
-/* Tokens específicos do bracket no dark */
+/* Tokens específicos do bracket no dark — v4.10.0 modern redesign.
+   Cards com gradiente sutil, bordas em rgba pra "respirar", scores em
+   colunas tabular-nums, conectores curvos. */
 .bracket-page {
-  --bk-card-bg: #1c1c1c;          /* fundo do card de match */
-  --bk-card-head: #161616;         /* fundo do header cinza do card */
-  --bk-card-foot: #161616;         /* fundo do footer */
-  --bk-border: #2a2a2a;            /* borda dos cards */
-  --bk-border-strong: #353535;     /* conectores */
-  --bk-text: #ededed;              /* nome do jogador (branco) */
-  --bk-text-muted: #888;           /* meta info */
-  --bk-text-loser: #6a6a6a;        /* nome do perdedor (apagado) */
-  --bk-score-bg: #232323;          /* quadradinho de score normal */
-  --bk-score-winner-bg: #2d2d2d;   /* score do vencedor (mais claro) */
-  --bk-score-winner-text: #c8ff3d; /* texto do score vencedor (verde-limão) */
-  --bk-row-winner-bg: rgba(200, 255, 61, 0.04); /* highlight da linha vencedora */
-  --bk-bg: #0e0e0e;                /* fundo geral da chave */
+  --bk-bg: #0a0a0a;
+  --bk-bg-elev: #111;
+
+  /* Card surface — gradiente top→bottom dá leve sensação de "vidro fosco" */
+  --bk-card-bg: linear-gradient(180deg, #1d1d1f 0%, #161618 100%);
+  --bk-card-bg-flat: #1a1a1c;       /* fallback sólido onde gradient não cabe */
+  --bk-card-head: rgba(255,255,255,0.025);
+  --bk-card-foot: rgba(255,255,255,0.018);
+
+  /* Borders */
+  --bk-border: rgba(255,255,255,0.08);
+  --bk-border-hover: rgba(255,255,255,0.18);
+  --bk-border-strong: rgba(255,255,255,0.14);
+
+  /* Text */
+  --bk-text: #f2f2f4;
+  --bk-text-secondary: rgba(242,242,244,0.72);
+  --bk-text-muted: rgba(242,242,244,0.45);
+  --bk-text-loser: rgba(242,242,244,0.42);
+
+  /* Scores */
+  --bk-score-bg: rgba(255,255,255,0.05);
+  --bk-score-winner-bg: rgba(200,255,61,0.16);
+  --bk-score-winner-text: #d6ff5c;
+
+  /* Winner row tint */
+  --bk-row-winner-bg: rgba(200,255,61,0.045);
+
+  /* Shadows */
+  --bk-shadow-card: 0 1px 0 rgba(255,255,255,0.04) inset, 0 4px 12px rgba(0,0,0,0.42);
+  --bk-shadow-card-hover: 0 1px 0 rgba(255,255,255,0.07) inset, 0 10px 28px rgba(0,0,0,0.6), 0 0 0 1px rgba(200,255,61,0.22);
 
   margin: -16px;
   padding: 0;
@@ -887,89 +907,146 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 .bracket-round {
   display: flex;
   flex-direction: column;
-  width: 280px;
+  width: 320px;
   flex-shrink: 0;
   position: relative;
   /* gaps calculados dinamicamente pelo JS */
 }
 
-/* ============ CARD DE MATCH ============ */
+/* ============ CARD DE MATCH (v4.10.0 redesign) ============ */
 .bk-match {
   background: var(--bk-card-bg);
   border: 1px solid var(--bk-border);
-  border-radius: 8px;
-  width: 280px;
+  border-radius: 12px;
+  width: 320px;
   position: relative;
   z-index: 2;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-  transition: box-shadow 0.2s, border-color 0.2s, transform 0.2s;
+  box-shadow: var(--bk-shadow-card);
+  transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
   overflow: hidden;
+  cursor: default;
 }
 .bk-match:hover {
-  border-color: #404040;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  border-color: var(--bk-border-hover);
+  box-shadow: var(--bk-shadow-card-hover);
+  transform: translateY(-1px);
+}
+.bk-match[data-has-winner="true"] {
+  /* Match concluído: borda esquerda lima sutil pra rastrear visualmente */
+  border-left: 1px solid rgba(200,255,61,0.35);
 }
 
-/* Header cinza do card: "#1 · R32 · Tennis" + dropdown */
+/* ----- Header: ícone + #N · Round · Categoria ----- */
 .bk-match-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 7px 12px;
+  padding: 9px 14px;
   background: var(--bk-card-head);
   border-bottom: 1px solid var(--bk-border);
   font-size: 11px;
-  color: #999;
-  font-weight: 500;
-  letter-spacing: 0.2px;
+  color: var(--bk-text-muted);
+  font-weight: 600;
+  letter-spacing: 0.3px;
 }
 .bk-match-head .bk-trophy {
   display: inline-flex;
   gap: 6px;
   align-items: center;
+  color: var(--bk-text-muted);
+  min-width: 0; /* permite truncar */
 }
-.bk-match-head .bk-trophy::before {
-  content: '🏆';
-  font-size: 10px;
-  filter: grayscale(0.5);
-  opacity: 0.6;
+.bk-trophy-icon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  color: rgba(200,255,61,0.55);
 }
+.bk-match-num {
+  font-weight: 700;
+  color: var(--bk-text-secondary);
+  letter-spacing: 0;
+}
+.bk-divider {
+  color: rgba(255,255,255,0.22);
+  font-weight: 400;
+}
+.bk-round-label, .bk-category-label {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--bk-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bk-category-label {
+  color: rgba(200,255,61,0.7);
+}
+
 .bk-match-head .bk-options {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 4px;
   cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 4px;
-  color: #999;
+  padding: 3px 8px;
+  border-radius: 6px;
+  color: var(--bk-text-secondary);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid transparent;
+  transition: background 150ms, border-color 150ms, color 150ms;
+  font-variant-numeric: tabular-nums;
+  min-width: 28px;
+  justify-content: center;
 }
-.bk-match-head .bk-options:hover { background: #232323; color: #ccc; }
+.bk-match-head .bk-options:hover {
+  background: rgba(255,255,255,0.08);
+  border-color: var(--bk-border);
+  color: var(--bk-text);
+}
 .bk-match-head .bk-options::after {
-  content: '▾';
-  font-size: 10px;
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-1px) rotate(45deg);
   margin-left: 2px;
+  opacity: 0.7;
 }
 
-/* Linha do jogador */
+/* ----- Linha do jogador ----- */
 .bk-player-row {
   display: flex;
   align-items: center;
-  padding: 10px 12px;
+  padding: 11px 14px;
   border-bottom: 1px solid var(--bk-border);
   position: relative;
-  min-height: 44px;
-  background: var(--bk-card-bg);
+  min-height: 48px;
+  background: transparent;
+  transition: background 150ms ease;
 }
 .bk-player-row:last-of-type { border-bottom: 0; }
-.bk-player-row.winner { background: var(--bk-row-winner-bg); }
+.bk-player-row.winner {
+  background: var(--bk-row-winner-bg);
+}
+.bk-player-row.winner::before {
+  /* Filete lima na esquerda da linha vencedora */
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 2px;
+  background: rgba(200,255,61,0.85);
+  box-shadow: 0 0 8px rgba(200,255,61,0.4);
+}
 
 .bk-player-row .avatar {
-  width: 30px; height: 30px;
+  width: 32px; height: 32px;
   font-size: 11px;
   font-weight: 700;
-  margin-right: 10px;
+  margin-right: 11px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -977,6 +1054,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   color: #fff;
   flex-shrink: 0;
   position: relative;
+  box-shadow: 0 0 0 2px rgba(0,0,0,0.25);
 }
 
 /* Badge ✓/✕ sobreposto ao avatar */
@@ -990,7 +1068,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   font-size: 8px;
   font-weight: 900;
   color: #fff;
-  border: 2px solid var(--bk-card-bg);
+  border: 2px solid var(--bk-bg-elev);
   line-height: 1;
 }
 .bk-player-status.win { background: #22c55e; }
@@ -998,13 +1076,14 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 
 .bk-player-name {
   flex: 1;
-  font-size: 13.5px;
+  font-size: 14px;
   color: var(--bk-text);
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   letter-spacing: -0.1px;
+  line-height: 1.25;
 }
 /* Perdedor: nome opaco */
 .bk-player-row:not(.winner):not(.bye) .bk-player-name {
@@ -1020,69 +1099,90 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 /* Avatar de BYE (cinza com X) */
 .bk-player-row .avatar.bye,
 .avatar.bye {
-  background: #2a2a2a !important;
-  color: #666 !important;
-  font-weight: 700;
+  background: rgba(255,255,255,0.06) !important;
+  color: rgba(255,255,255,0.35) !important;
+  font-weight: 600;
+  box-shadow: none;
 }
 
-/* Quadradinhos de score */
+/* ----- Colunas de score (set scores) ----- */
 .bk-scores {
   display: flex;
-  gap: 3px;
-  margin-left: 8px;
+  gap: 4px;
+  margin-left: 10px;
+  flex-shrink: 0;
 }
 .bk-score {
-  min-width: 26px;
-  height: 30px;
+  min-width: 28px;
+  height: 32px;
   background: var(--bk-score-bg);
-  border-radius: 4px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   position: relative;
-  padding: 0 6px;
-  color: #888;
+  padding: 0 7px;
+  color: var(--bk-text-secondary);
+  border: 1px solid transparent;
+  transition: background 150ms, color 150ms, border-color 150ms;
 }
 .bk-score.winner {
   background: var(--bk-score-winner-bg);
   color: var(--bk-score-winner-text);
   font-weight: 800;
+  border-color: rgba(200,255,61,0.25);
 }
-/* Tiebreak: numerinho subscript */
+/* Tiebreak: numerinho sobrescrito */
 .bk-score.tiebreak::after {
   content: attr(data-tb);
   position: absolute;
-  bottom: 1px;
-  right: 2px;
+  bottom: 2px;
+  right: 3px;
   font-size: 8px;
   font-weight: 700;
   line-height: 1;
   color: inherit;
-  opacity: 0.85;
+  opacity: 0.8;
 }
 
-/* Footer com data e H2H */
+/* ----- Footer com data e H2H ----- */
 .bk-match-foot {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 7px 12px;
+  padding: 9px 14px;
   border-top: 1px solid var(--bk-border);
   font-size: 11px;
   color: var(--bk-text-muted);
   background: var(--bk-card-foot);
+  font-weight: 500;
+}
+.bk-match-date {
+  letter-spacing: 0.1px;
 }
 .bk-h2h {
   cursor: pointer;
   color: var(--bk-text-muted);
   text-decoration: none;
-  font-weight: 600;
-  letter-spacing: 0.3px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  padding: 3px 6px;
+  border-radius: 4px;
+  transition: color 150ms, background 150ms;
 }
-.bk-h2h:hover { color: var(--brand); }
+.bk-h2h:hover, .bk-h2h:focus-visible {
+  color: var(--brand);
+  background: rgba(200,255,61,0.08);
+  outline: none;
+}
+.bk-h2h:focus-visible {
+  box-shadow: 0 0 0 2px rgba(200,255,61,0.4);
+}
 
 /* ============ CONECTORES SVG ============
    width/height são definidos via JS em pixels (matching scrollWidth/Height
@@ -1579,11 +1679,18 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 .mt-lg { margin-top: 24px; }
 
 @media (max-width: 480px) {
-  .bracket-rounds-header { gap: 50px; padding: 14px 14px 6px; }
-  .bracket { gap: 50px; padding: 8px 14px 32px; }
-  .bracket-round, .bk-match { width: 260px; }
-  .bracket-round-label { width: 260px; font-size: 12px; }
+  .bracket-rounds-header { gap: 56px; padding: 14px 14px 6px; }
+  .bracket { gap: 56px; padding: 8px 14px 32px; }
+  .bracket-round, .bk-match { width: 280px; }
+  .bracket-round-label { width: 280px; font-size: 12px; }
   .bracket-next-btn { top: 10px; right: 10px; padding: 5px 8px; font-size: 10px; }
+  .bk-match { border-radius: 10px; }
+  .bk-match-head { padding: 8px 12px; font-size: 10.5px; }
+  .bk-player-row { padding: 10px 12px; min-height: 44px; }
+  .bk-player-row .avatar { width: 30px; height: 30px; margin-right: 9px; }
+  .bk-player-name { font-size: 13.5px; }
+  .bk-score { min-width: 26px; height: 30px; font-size: 13px; padding: 0 6px; }
+  .bk-match-foot { padding: 8px 12px; font-size: 10.5px; }
 }
 
 /* ==================================================
@@ -1790,97 +1897,41 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 }
 
 /* ==================================================
-   BRACKETS: melhor visibilidade (v4.6)
-   Aumenta peso/tamanho de nomes e scores, contraste, espaçamento.
+   BRACKETS — refinos do redesign v4.10.0
+   Apenas regras pequenas que não conflitam com o bloco principal acima.
+   Todas as definições "grandes" (cards, rows, scores) ficam no bloco
+   principal próximo da linha 887. As !important antigas foram removidas.
    ================================================== */
-.bk-player-name {
-  font-size: 14.5px !important;
-  font-weight: 700 !important;
-  color: #ffffff !important;
-  letter-spacing: -0.1px;
-}
-.bk-player-row:not(.winner):not(.bye) .bk-player-name {
-  color: #d1d5db !important;        /* loser: cinza claro mais legível */
-  font-weight: 600 !important;
-}
-.bk-player-row.winner .bk-player-name {
-  color: #ffffff !important;
-}
 
-/* Score: maiores e bolder */
-.bk-score {
-  min-width: 30px !important;
-  height: 34px !important;
-  font-size: 15px !important;
-  font-weight: 700 !important;
-  color: #9ca3af !important;
-}
-.bk-score.winner {
-  background: var(--brand) !important;
-  color: var(--brand-text) !important;
-  font-weight: 800 !important;
-}
-
-/* Match header (#1 • R32) maior + cor de marca */
-.bk-match-head {
-  font-size: 12px !important;
-  font-weight: 700 !important;
-  letter-spacing: 0.4px;
-  padding: 9px 12px !important;
-}
-.bk-match-head .bk-trophy {
-  color: var(--brand) !important;
-  font-weight: 800;
-}
-
-/* Round labels (R64, R32, etc): maior + cor marca */
+/* Round labels (R64, R32, etc): destacados mas não competindo com brand */
 .bracket-round-label {
-  font-size: 14px !important;
-  font-weight: 800 !important;
-  color: var(--brand) !important;
-  letter-spacing: 0.5px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--bk-text-secondary);
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
 }
 
-/* Cards: hover/focus mais perceptível */
-.bk-match {
-  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
-}
-.bk-match:hover {
-  transform: translateY(-1px);
-  border-color: var(--brand) !important;
-  box-shadow: 0 6px 20px rgba(200, 255, 61, 0.18) !important;
-}
-
-/* Avatares maiores */
-.bk-player-row .avatar {
-  width: 34px !important;
-  height: 34px !important;
-  font-size: 12px !important;
-  font-weight: 800 !important;
-  margin-right: 12px !important;
-}
-
-/* Conectores SVG entre rounds: BEM visíveis pra rastrear R64 → Final.
-   Caminho neutro (sem winner): branco translúcido, contraste com fundo escuro.
-   Caminho de winner: full brand lime com drop-shadow pra "iluminar" o trajeto
-   vencedor de ponta a ponta. */
+/* Conectores SVG entre rounds (v4.10.0): paths L-shape contínuos com
+   curva quadrática nos cantos, render order: losers → winners (winner por
+   cima). Linha neutra: branco translúcido. Winner: lima brilhante com glow
+   pra rastrear R64 → Final visualmente. */
 .bracket-svg path {
   fill: none;
-  stroke: rgba(255, 255, 255, 0.45);
-  stroke-width: 3;
+  stroke: rgba(255, 255, 255, 0.32);
+  stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
-  filter: drop-shadow(0 0 2px rgba(200, 255, 61, 0.15));
 }
 .bracket-svg path.winner-path {
   stroke: rgb(200, 255, 61);
-  stroke-width: 4;
-  filter: drop-shadow(0 0 4px rgba(200, 255, 61, 0.55))
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 3px rgba(200, 255, 61, 0.55))
           drop-shadow(0 0 1px rgba(200, 255, 61, 0.85));
 }
 @media (max-width: 480px) {
-  .bracket-svg path { stroke-width: 2.5; }
-  .bracket-svg path.winner-path { stroke-width: 3; }
+  .bracket-svg path { stroke-width: 1.5; }
+  .bracket-svg path.winner-path { stroke-width: 2; }
 }
 
 /* Bracket round: posicionamento dos matches é feito por JS (position:absolute

@@ -17,8 +17,8 @@ const ROUND_LABELS = {
 };
 
 // Espaçamento base entre matches do round mais à esquerda (R1).
-// Outros rounds calculam relativo a este.
-const BASE_GAP = 28;
+// Outros rounds calculam relativo a este (cada round dobra o espaço).
+const BASE_GAP = 48;
 const ADD_BTN_HEIGHT = 44; // espaço pro "+ Match em..." (edit mode)
 
 function hashStr(s) {
@@ -76,7 +76,7 @@ function renderPlayerRow(memberId, scores, isWinner, isBye, idx) {
   `;
 }
 
-function renderMatch(match) {
+function renderMatch(match, categoryLabel) {
   const w = match.winner;
   const p1IsWinner = w ? (w === match.p1) : null;
   const p2IsWinner = w ? (w === match.p2) : null;
@@ -89,7 +89,7 @@ function renderMatch(match) {
   const walkoverChip = match.walkover_reason
     ? `<span class="walkover-chip" title="Walkover">${match.walkover_reason}</span>` : '';
 
-  // Calculate sets won for the dropdown indicator
+  // Sets vencidos por jogador (pra contador discreto no header)
   let setsP1 = 0, setsP2 = 0;
   if (match.scores) {
     match.scores.forEach(s => {
@@ -100,18 +100,35 @@ function renderMatch(match) {
   const headerCount = setsP1 + setsP2;
 
   const roundLabel = ROUND_LABELS[match.round] || match.round;
+  const catChip = categoryLabel
+    ? `<span class="bk-divider">·</span><span class="bk-category-label">${categoryLabel}</span>`
+    : '';
+
+  // Trophy SVG inline (Heroicons-style, sem emoji)
+  const trophyIcon = `<svg class="bk-trophy-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <path d="M4 3h8v2.5a4 4 0 0 1-8 0V3z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+    <path d="M4 4H2.5a1 1 0 0 0-1 1v.5a2 2 0 0 0 2 2H4M12 4h1.5a1 1 0 0 1 1 1v.5a2 2 0 0 1-2 2H12" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+    <path d="M6.5 9.5h3v2.5h-3zM5 12.5h6v1H5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+  </svg>`;
+
   return `
     <div class="bk-match" data-match-id="${match.id}"${match.winner ? ' data-has-winner="true"' : ''}>
       <div class="bk-match-head">
-        <div class="bk-trophy">#${match.n} • ${roundLabel}</div>
-        <div class="bk-options">${walkoverChip}${headerCount}</div>
+        <div class="bk-trophy">
+          ${trophyIcon}
+          <span class="bk-match-num">#${match.n}</span>
+          <span class="bk-divider">·</span>
+          <span class="bk-round-label">${roundLabel}</span>
+          ${catChip}
+        </div>
+        <div class="bk-options" aria-label="Sets jogados">${walkoverChip}${headerCount}</div>
       </div>
       ${renderPlayerRow(match.p1, match.scores, p1IsWinner, match.isBye, 0)}
       ${renderPlayerRow(match.p2, match.scores, p2IsWinner, match.isBye, 1)}
       ${dateStr ? `
         <div class="bk-match-foot">
-          <span>${dateStr}</span>
-          <a class="bk-h2h">H2H</a>
+          <span class="bk-match-date">${dateStr}</span>
+          <a class="bk-h2h" role="button" tabindex="0">H2H</a>
         </div>
       ` : ''}
     </div>
@@ -140,12 +157,22 @@ function renderBracket(bracket, container) {
     </div>
   `;
 
+  // Categoria pro chip do header — usa STATE.categories se disponível
+  let catLabel = '';
+  try {
+    const catId = bracket.category_id || (typeof currentBracketCategory !== 'undefined' && currentBracketCategory);
+    if (catId && typeof STATE !== 'undefined' && STATE.categories) {
+      const c = STATE.categories.find(x => x.id === catId);
+      if (c) catLabel = c.name;
+    }
+  } catch (e) { /* fallback silencioso */ }
+
   // Conteúdo das rodadas (matches são posicionados via JS - position:absolute)
   const roundsHTML = rounds.map((roundName, ri) => {
     const matches = bracket.matches[roundName] || [];
     return `
       <div class="bracket-round" data-round="${roundName}" data-round-idx="${ri}">
-        ${matches.map(m => renderMatch(m)).join('')}
+        ${matches.map(m => renderMatch(m, catLabel)).join('')}
       </div>
     `;
   }).join('');
@@ -318,6 +345,39 @@ function drawConnectors(container) {
   const rounds = inner.querySelectorAll('.bracket-round');
   const paths = [];
 
+  // Raio dos cantos (arcos) dos conectores. 0 = canto reto.
+  // Nota: stroke-linejoin: round já dá um leve arredondamento via CSS,
+  // mas Q-curves nos próprios paths fazem o arco real visível.
+  const CORNER_R = 10;
+
+  // Helper: constrói path L-shape de um source até o target com cantos arredondados.
+  // sX,sY = ponto saindo do match source (na borda direita do card)
+  // mX = midX (vertical de junção entre os dois sources)
+  // tY = altura do centro do target (também é o midpoint vertical entre y1 e y2)
+  // tX = borda esquerda do target
+  // Direção da segunda dobra depende de sY vs tY (sY acima → desce, abaixo → sobe).
+  function lShapePath(sX, sY, mX, tY, tX) {
+    const r = Math.min(CORNER_R, Math.abs(mX - sX) / 2, Math.abs(tY - sY) / 2 || CORNER_R, Math.abs(tX - mX) / 2);
+    if (r < 2 || sY === tY) {
+      // Caso degenerado: linha reta (sem curva)
+      return `M ${sX} ${sY} H ${mX} V ${tY} H ${tX}`;
+    }
+    const dirV = tY > sY ? 1 : -1;   // descendo (+) ou subindo (-)
+    // M source → reta horizontal até pouco antes de mX
+    // Q curva no canto (mX, sY) saindo vertical
+    // V até pouco antes de tY
+    // Q curva no canto (mX, tY) saindo horizontal
+    // H até tX
+    return [
+      `M ${sX} ${sY}`,
+      `H ${mX - r}`,
+      `Q ${mX} ${sY} ${mX} ${sY + r * dirV}`,
+      `V ${tY - r * dirV}`,
+      `Q ${mX} ${tY} ${mX + r} ${tY}`,
+      `H ${tX}`,
+    ].join(' ');
+  }
+
   for (let ri = 0; ri < rounds.length - 1; ri++) {
     const currentMatches = rounds[ri].querySelectorAll('.bk-match');
     const nextMatches = rounds[ri + 1].querySelectorAll('.bk-match');
@@ -342,30 +402,29 @@ function drawConnectors(container) {
 
       const m1Won = m1.dataset.hasWinner === 'true';
       const m2Won = m2 && m2.dataset.hasWinner === 'true';
-      const wcls = won => won ? ' class="winner-path"' : '';
 
-      // horizontal saindo de m1 → midX
-      paths.push(`<path d="M ${x1} ${y1} H ${midX}"${wcls(m1Won)}/>`);
-
+      // Constroi uma path L continua de cada source ate o target.
+      // Render order: losers/neutros primeiro, winner por cima — garante que o
+      // trajeto vencedor (lima brilhante) fica visualmente sobre os outros.
+      const sources = [{ x: x1, y: y1, won: m1Won }];
       if (r2) {
         const y2 = r2.top + r2.height / 2 - innerRect.top;
-        // horizontal saindo de m2 → midX
-        paths.push(`<path d="M ${x1} ${y2} H ${midX}"${wcls(m2Won)}/>`);
-        // vertical entre m1 e m2 em midX
-        paths.push(`<path d="M ${midX} ${y1} V ${y2}"/>`);
+        sources.push({ x: x1, y: y2, won: m2Won });
       }
+      // Sort: losers (false) primeiro, winners (true) depois
+      sources.sort((a, b) => (a.won ? 1 : 0) - (b.won ? 1 : 0));
 
-      // horizontal de midX → target. O winner-class aqui marca o trajeto
-      // pra rastrear "quem chegou" — se um dos lados tinha winner, o trajeto
-      // pintado em cor de marca cobre R64→Final.
-      paths.push(`<path d="M ${midX} ${yt} H ${xt}"${wcls(m1Won || m2Won)}/>`);
+      for (const s of sources) {
+        const cls = s.won ? ' class="winner-path"' : '';
+        paths.push('<path d="' + lShapePath(s.x, s.y, midX, yt, xt) + '"' + cls + '/>');
+      }
     }
   }
 
   svg.innerHTML = paths.join('');
 }
 
-/* ResizeObserver + MutationObserver: redesenha sempre que dimensões ou DOM
+/* ResizeObserver + MutationObserver: redesenha sempre que dimensoes ou DOM
    dos matches mudam (resize de janela, fontes carregando, admin edit mode
    adicionando/removendo matches, drag-drop trocando jogadores). */
 const _bracketObservers = new WeakMap();
@@ -373,18 +432,13 @@ function attachBracketObservers(container) {
   const inner = container.querySelector('#bracket-inner');
   if (!inner) return;
 
-  // Limpa observers anteriores (renderBracket pode ser chamado de novo)
   const prev = _bracketObservers.get(container);
   if (prev) {
     prev.ro?.disconnect();
     prev.mo?.disconnect();
   }
 
-  // Throttle simples via setTimeout (não usa RAF — flaky em iframes/background)
   let scheduled = null;
-  // Flag pra evitar loop: layoutBracket muda style dos matches, o que dispara
-  // MutationObserver de novo. Trate só MutationObserver mudanças de subtree de
-  // childList, e ignore mudanças de attributes que vieram do próprio JS.
   let inLayout = false;
   const redraw = () => {
     if (inLayout) return;
@@ -401,11 +455,8 @@ function attachBracketObservers(container) {
   };
 
   const ro = new ResizeObserver(redraw);
-  // Observe inner E o primeiro match (pra detectar mudança de altura de card)
   ro.observe(inner);
 
-  // Observa childList (novos matches via edit mode) e data-has-winner
-  // (winner muda → re-pinta winner-path).
   const mo = new MutationObserver((muts) => {
     let needs = false;
     for (const mut of muts) {
@@ -421,7 +472,7 @@ function attachBracketObservers(container) {
   _bracketObservers.set(container, { ro, mo });
 }
 
-/* Re-layout em resize de janela (fallback além do ResizeObserver). */
+/* Re-layout em resize de janela (fallback alem do ResizeObserver). */
 window.addEventListener('resize', () => {
   document.querySelectorAll('.bracket-scroll').forEach(c => layoutBracket(c));
 });
