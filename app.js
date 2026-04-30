@@ -636,11 +636,20 @@ function bindBracketEditModeClicks() {
     row.dataset.matchId = matchId;
 
     row.addEventListener('click', (e) => {
-      if (e.target.closest('.match-action-btn')) return;
+      if (e.target.closest('.bk-player-name-input') || e.target.closest('.match-action-btn')) return;
       if (e.detail === 0) return;       // click sintético
       e.stopPropagation();
       openSlotEditor(matchId, slotKey);
     });
+
+    // Dblclick no nome: edição inline do display_label do entry
+    const nameEl = row.querySelector('.bk-player-name');
+    if (nameEl) {
+      nameEl.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        startInlineEdit(nameEl, matchId, slotKey);
+      });
+    }
 
     // Drag source
     row.draggable = true;
@@ -883,6 +892,57 @@ async function applyDragDrop({ srcMatchId, srcSlot, srcPlayer }, { dstMatchId, d
   navigate('tournament');
 }
 
+/* Edição inline do display_label do entry (dblclick no nome do jogador) */
+function startInlineEdit(nameEl, matchId, slotKey) {
+  const catId = currentBracketCategory;
+  const found = findMatchInBracket(catId, matchId);
+  const playerId = found?.match?.[slotKey];
+  if (!playerId) { toast('Slot vazio', 'info'); return; }
+
+  const currentName = memberName(playerId);
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'bk-player-name-input';
+  input.value = currentName;
+  input.style.cssText = 'width:100%;padding:2px 6px;font-size:14.5px;font-weight:700;background:rgba(0,0,0,0.5);color:#fff;border:1px solid var(--brand);border-radius:4px;outline:none';
+
+  const save = async () => {
+    const newName = input.value.trim();
+    if (newName && newName !== currentName) {
+      await renameEntryInBracket(catId, playerId, newName);
+    }
+    navigate('tournament'); // re-render
+  };
+  input.addEventListener('blur', save);
+  input.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') input.blur();
+    if (ev.key === 'Escape') { input.value = currentName; input.blur(); }
+  });
+
+  nameEl.style.display = 'none';
+  nameEl.parentNode.insertBefore(input, nameEl.nextSibling);
+  input.focus(); input.select();
+}
+
+async function renameEntryInBracket(catId, playerId, newName) {
+  const br = STATE.brackets[catId];
+  if (!br) return;
+  const entry = (br.entries || []).find(e => e.id === playerId);
+  if (entry) entry.name = newName;
+  // Atualiza tournamentPlayers global pra getMember refletir
+  const tp = (STATE.tournamentPlayers || []).find(p => p.id === playerId);
+  if (tp) tp.name = newName;
+  saveState();
+  try {
+    if (STATE._activeTournamentId) {
+      await TP.Brackets.updateData(STATE._activeTournamentId, catId, br);
+      toast('Nome atualizado ✅', 'success');
+    }
+  } catch (e) {
+    toast('Erro: ' + (e.message || 'falha'), 'error');
+  }
+}
+
 function openSlotEditor(matchId, slotKey) {
   const catId = currentBracketCategory;
   const found = findMatchInBracket(catId, matchId);
@@ -1011,7 +1071,11 @@ function openMatchEditor(matchId) {
           ${match.p2 ? `<option value="${match.p2}" ${match.winner === match.p2 ? 'selected' : ''}>${p2Name}</option>` : ''}
         </select>
       </div>
-      <div class="field"><label>Walkover / observação (opcional)</label><input id="match-walkover" placeholder="ex: lesão, WO" value="${match.walkover_reason || match.walkoverReason || ''}"></div>
+      <div class="field">
+        <label>Walkover / observação (texto livre — ex: "WO", "lesão", "abandono")</label>
+        <input id="match-walkover" placeholder="ex: lesão, WO, abandono" value="${match.walkover_reason || match.walkoverReason || ''}">
+      </div>
+      <p class="muted" style="font-size:11px;margin-top:-8px">💡 Se o match foi resolvido por desistência/abandono, deixa scores em branco e preenche só esse campo + o vencedor.</p>
     `,
     actions: [
       { label: 'Cancelar', class: 'btn-secondary', onClick: closeModal },

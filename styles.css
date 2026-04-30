@@ -1988,3 +1988,8 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 }
 .round-action-btn:hover { opacity: 0.9; }
 
+/* Input inline pra rename de jogador (dblclick no nome) */
+.bk-player-name-input {
+  font-family: var(--font-body);
+}
+
