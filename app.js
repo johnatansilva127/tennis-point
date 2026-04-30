@@ -636,6 +636,7 @@ function bindBracketEditModeClicks() {
     row.dataset.matchId = matchId;
 
     row.addEventListener('click', (e) => {
+      if (e.target.closest('.match-action-btn')) return;
       if (e.detail === 0) return;       // click sintético
       e.stopPropagation();
       openSlotEditor(matchId, slotKey);
@@ -670,6 +671,177 @@ function bindBracketEditModeClicks() {
       } catch (err) { console.warn('drop parse err', err); }
     });
   });
+
+  // Botão 🗑️ por match (header do card)
+  document.querySelectorAll('.bk-match').forEach(card => {
+    if (card.querySelector('.match-action-btn')) return;
+    const matchId = card.dataset.matchId;
+    const head = card.querySelector('.bk-match-head');
+    if (head) {
+      const btn = document.createElement('button');
+      btn.className = 'match-action-btn match-remove-btn';
+      btn.title = 'Remover este match';
+      btn.textContent = '🗑️';
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        confirmRemoveMatch(matchId);
+      });
+      head.appendChild(btn);
+    }
+  });
+
+  // Botão "+ Match em <round>" no fim de cada round
+  document.querySelectorAll('.bracket-round').forEach(roundEl => {
+    if (roundEl.querySelector('.add-match-btn')) return;
+    const roundName = roundEl.dataset.round;
+    if (!roundName) return;
+    const btn = document.createElement('button');
+    btn.className = 'add-match-btn';
+    btn.title = `Adicionar match em ${ROUND_LABELS[roundName] || roundName}`;
+    btn.innerHTML = `+ Match em ${roundName}`;
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      addMatchToRound(roundName);
+    });
+    roundEl.appendChild(btn);
+  });
+
+  // Botão "+ Round" no header do bracket
+  const header = document.querySelector('.bracket-rounds-header');
+  if (header && !header.querySelector('.round-action-btn')) {
+    const addRoundBtn = document.createElement('button');
+    addRoundBtn.className = 'round-action-btn';
+    addRoundBtn.title = 'Adicionar nova rodada antes da 1ª atual (ex: R128 pre-qualifying)';
+    addRoundBtn.innerHTML = '+ Round';
+    addRoundBtn.addEventListener('click', confirmAddRound);
+    header.insertBefore(addRoundBtn, header.firstChild);
+  }
+}
+
+/* Add match novo num round específico (cria match vazio no fim do array) */
+async function addMatchToRound(roundName) {
+  const catId = currentBracketCategory;
+  const br = STATE.brackets[catId];
+  if (!br || !br.matches[roundName]) return;
+  const list = br.matches[roundName];
+  const lastN = list.length ? list[list.length - 1].n : 0;
+  const newN = lastN + 1;
+  list.push({
+    id: `m-${roundName.toLowerCase()}-${newN}`,
+    n: newN, round: roundName,
+    p1: null, p2: null, scores: [], winner: null,
+    isBye: false, walkover_reason: null, date: null, time: null,
+  });
+  saveState();
+  try {
+    if (STATE._activeTournamentId) {
+      await TP.Brackets.updateData(STATE._activeTournamentId, catId, br);
+      toast(`Match adicionado em ${roundName} ✅`, 'success');
+    }
+  } catch (e) {
+    toast('Erro: ' + (e.message || 'falha'), 'error');
+  }
+  navigate('tournament');
+}
+
+/* Remove um match do array, renumera os subsequentes do round */
+function confirmRemoveMatch(matchId) {
+  const catId = currentBracketCategory;
+  const found = findMatchInBracket(catId, matchId);
+  if (!found) return;
+  const { match, round } = found;
+  openModal({
+    title: '🗑️ Remover match',
+    sub: `Match #${match.n} · ${round}`,
+    body: `
+      <p class="muted" style="font-size:14px;margin-bottom:8px">${memberName(match.p1) || '(vazio)'} vs ${memberName(match.p2) || '(vazio)'}</p>
+      <p class="muted" style="font-size:13px">Vai remover este match e renumerar os matches seguintes do round. <strong>Não dá pra desfazer.</strong></p>
+    `,
+    actions: [
+      { label: 'Cancelar', class: 'btn-secondary', onClick: closeModal },
+      { label: 'REMOVER', class: 'btn-danger', onClick: () => doRemoveMatch(catId, round, match.n) },
+    ],
+  });
+}
+
+async function doRemoveMatch(catId, round, matchN) {
+  const br = STATE.brackets[catId];
+  const list = br.matches[round];
+  const idx = list.findIndex(m => m.n === matchN);
+  if (idx < 0) return;
+  list.splice(idx, 1);
+  // Renumera matches deste round (n e id) — só os que foram afetados
+  list.forEach((m, i) => {
+    const newN = list[0].n + i;
+    m.n = newN;
+    m.id = `m-${round.toLowerCase()}-${newN}`;
+  });
+  saveState();
+  closeModal();
+  try {
+    if (STATE._activeTournamentId) {
+      await TP.Brackets.updateData(STATE._activeTournamentId, catId, br);
+      toast('Match removido ✅', 'success');
+    }
+  } catch (e) {
+    toast('Erro: ' + (e.message || 'falha'), 'error');
+  }
+  navigate('tournament');
+}
+
+/* Adiciona ROUND inteira (ex: R128 antes de R64 pra pre-qualifying) */
+function confirmAddRound() {
+  openModal({
+    title: '+ Nova rodada',
+    body: `
+      <p class="muted" style="font-size:13px;margin-bottom:12px">Adiciona rodada extra antes da 1ª rodada atual. Útil pra criar pre-qualifying (ex: R128 antes de R64).</p>
+      <div class="field">
+        <label>Nome da rodada</label>
+        <select id="new-round-name">
+          <option value="R128">R128 (128 jogadores)</option>
+          <option value="R256">R256 (256 jogadores)</option>
+        </select>
+      </div>
+      <div class="field"><label>Quantidade de matches</label><input id="new-round-count" type="number" value="2" min="1" max="64"></div>
+      <p class="muted" style="font-size:12px">⚠️ Use só se realmente precisar — quebra a estrutura padrão do bracket.</p>
+    `,
+    actions: [
+      { label: 'Cancelar', class: 'btn-secondary', onClick: closeModal },
+      { label: 'Adicionar', class: 'btn-primary', onClick: doAddRound },
+    ],
+  });
+}
+
+async function doAddRound() {
+  const catId = currentBracketCategory;
+  const br = STATE.brackets[catId];
+  if (!br) return;
+  const name = document.getElementById('new-round-name').value;
+  const count = Math.max(1, parseInt(document.getElementById('new-round-count').value, 10) || 1);
+  if (br.rounds.includes(name)) { toast('Round já existe', 'error'); return; }
+  br.rounds.unshift(name);
+  const matches = [];
+  let n = 1;
+  for (let i = 0; i < count; i++) {
+    matches.push({
+      id: `m-${name.toLowerCase()}-${n}`, n, round: name,
+      p1: null, p2: null, scores: [], winner: null,
+      isBye: false, walkover_reason: null, date: null, time: null,
+    });
+    n++;
+  }
+  br.matches[name] = matches;
+  saveState();
+  closeModal();
+  try {
+    if (STATE._activeTournamentId) {
+      await TP.Brackets.updateData(STATE._activeTournamentId, catId, br);
+      toast(`${name} adicionada ✅`, 'success');
+    }
+  } catch (e) {
+    toast('Erro: ' + (e.message || 'falha'), 'error');
+  }
+  navigate('tournament');
 }
 
 /* Drag-and-drop: aplica swap entre dois slots (mesmo round ou rounds diferentes).
