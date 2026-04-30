@@ -620,7 +620,8 @@ function bindTournament() {
   }
 }
 
-/* Edit mode: cada slot p1/p2 abre modal pra trocar jogador. */
+/* Edit mode: cada slot p1/p2 abre modal pra trocar jogador.
+   Adicionalmente: HTML5 drag-and-drop entre slots (mesmo round ou rounds diferentes). */
 function bindBracketEditModeClicks() {
   if (!STATE.user || STATE.user.role !== 'admin') return;
   const rows = document.querySelectorAll('.bk-player-row');
@@ -628,15 +629,86 @@ function bindBracketEditModeClicks() {
     const card = row.closest('.bk-match');
     if (!card) return;
     const matchId = card.dataset.matchId;
-    // Identifica se é p1 ou p2: top row ou bot row
     const allRows = card.querySelectorAll('.bk-player-row');
     const slotKey = (allRows[0] === row) ? 'p1' : 'p2';
     row.classList.add('edit-slot');
+    row.dataset.slotKey = slotKey;
+    row.dataset.matchId = matchId;
+
     row.addEventListener('click', (e) => {
+      if (e.detail === 0) return;       // click sintético
       e.stopPropagation();
       openSlotEditor(matchId, slotKey);
     });
+
+    // Drag source
+    row.draggable = true;
+    row.addEventListener('dragstart', e => {
+      const found = findMatchInBracket(currentBracketCategory, matchId);
+      const playerId = found?.match?.[slotKey];
+      if (!playerId) { e.preventDefault(); return; }
+      e.dataTransfer.setData('text/plain', JSON.stringify({ matchId, slotKey, playerId }));
+      e.dataTransfer.effectAllowed = 'move';
+      row.classList.add('dragging');
+    });
+    row.addEventListener('dragend', () => row.classList.remove('dragging'));
+
+    // Drop target
+    row.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      row.classList.add('drag-over');
+    });
+    row.addEventListener('dragleave', () => row.classList.remove('drag-over'));
+    row.addEventListener('drop', e => {
+      e.preventDefault();
+      row.classList.remove('drag-over');
+      try {
+        const { matchId: srcMatchId, slotKey: srcSlot, playerId: srcPlayer } = JSON.parse(e.dataTransfer.getData('text/plain'));
+        if (srcMatchId === matchId && srcSlot === slotKey) return;
+        applyDragDrop({ srcMatchId, srcSlot, srcPlayer }, { dstMatchId: matchId, dstSlot: slotKey });
+      } catch (err) { console.warn('drop parse err', err); }
+    });
   });
+}
+
+/* Drag-and-drop: aplica swap entre dois slots (mesmo round ou rounds diferentes).
+   Se um slot ficar vazio com oponente preenchido, marca BYE + auto-advance. */
+async function applyDragDrop({ srcMatchId, srcSlot, srcPlayer }, { dstMatchId, dstSlot }) {
+  const catId = currentBracketCategory;
+  const br = STATE.brackets[catId];
+  if (!br) return;
+  const srcFound = findMatchInBracket(catId, srcMatchId);
+  const dstFound = findMatchInBracket(catId, dstMatchId);
+  if (!srcFound || !dstFound) { toast('Match não encontrado', 'error'); return; }
+
+  const dstPlayer = dstFound.match[dstSlot];
+  dstFound.match[dstSlot] = srcPlayer;
+  srcFound.match[srcSlot] = dstPlayer || null;
+
+  [srcFound, dstFound].forEach(({ match }) => {
+    if (match.p1 == null && match.p2 != null) {
+      match.winner = match.p2; match.isBye = true;
+      autoAdvanceWinnerInBracket(br, match);
+    } else if (match.p2 == null && match.p1 != null) {
+      match.winner = match.p1; match.isBye = true;
+      autoAdvanceWinnerInBracket(br, match);
+    } else if (match.p1 && match.p2) {
+      match.isBye = false;
+      if (!match.scores || !match.scores.length) match.winner = null;
+    }
+  });
+
+  saveState();
+  try {
+    if (STATE._activeTournamentId) {
+      await TP.Brackets.updateData(STATE._activeTournamentId, catId, br);
+      toast('Slot movido ✅', 'success');
+    }
+  } catch (e) {
+    toast('Erro: ' + (e.message || 'falha sync'), 'error');
+  }
+  navigate('tournament');
 }
 
 function openSlotEditor(matchId, slotKey) {

@@ -1905,4 +1905,30 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   padding: 8px 12px !important;
 }
 
+/* ==================================================
+   ADMIN edit-mode: drag-drop entre slots/rounds (v4.8)
+   ================================================== */
+
+/* Cards em edit mode: borda tracejada cor da marca */
+.bracket-scroll.edit-mode .bk-match {
+  border: 1.5px dashed rgba(200, 255, 61, 0.4) !important;
+}
+.bracket-scroll.edit-mode .bk-match:hover {
+  border-color: var(--brand) !important;
+}
+
+/* Drag feedback */
+.bracket-scroll.edit-mode .bk-player-row {
+  user-select: none;
+  cursor: grab;
+}
+.bracket-scroll.edit-mode .bk-player-row.dragging {
+  opacity: 0.4;
+  cursor: grabbing;
+}
+.bracket-scroll.edit-mode .bk-player-row.drag-over {
+  background: rgba(200, 255, 61, 0.18) !important;
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
+}
 
