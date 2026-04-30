@@ -1861,22 +1861,26 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   margin-right: 12px !important;
 }
 
-/* Conectores SVG: bem visíveis com cor de marca pros caminhos de winners.
-   Caminho neutro (sem winner ainda): cinza claro, mais grosso.
-   Caminho de winner: cor da marca (lima) com glow sutil pra rastrear progressão. */
+/* Conectores SVG entre rounds: BEM visíveis pra rastrear R64 → Final.
+   Caminho neutro (sem winner): cinza claro, contraste com fundo escuro,
+   sem competir com winners. Caminho de winner: full brand lime com
+   drop-shadow pra "iluminar" o trajeto vencedor de ponta a ponta. */
 .bracket-svg path {
   fill: none;
-  stroke: rgba(255, 255, 255, 0.45) !important;
+  stroke: rgba(255, 255, 255, 0.4) !important;
   stroke-width: 3 !important;
   stroke-opacity: 1 !important;
   opacity: 1 !important;
   stroke-linecap: round;
   stroke-linejoin: round;
+  filter: drop-shadow(0 0 2px rgba(200, 255, 61, 0.15));
 }
 .bracket-svg path.winner-path {
-  stroke: var(--brand) !important;
-  stroke-width: 3.5 !important;
-  filter: drop-shadow(0 0 3px rgba(200, 255, 61, 0.45));
+  stroke: rgb(200, 255, 61) !important;
+  stroke-width: 4 !important;
+  stroke-opacity: 1 !important;
+  filter: drop-shadow(0 0 4px rgba(200, 255, 61, 0.55))
+          drop-shadow(0 0 1px rgba(200, 255, 61, 0.85));
 }
 @media (max-width: 480px) {
   .bracket-svg path { stroke-width: 2.5 !important; }
