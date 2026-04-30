@@ -1,9 +1,13 @@
 /* ==================================================
-   TENNIS POINT — Bracket Renderer
-   Estilo inspirado em plataformas profissionais (LetzPlay)
+   TENNIS POINT — Bracket Renderer v2.0
+   Estratégia: posicionamento ABSOLUTO dos matches dentro do round
+   (em vez de flex+gap+padding), o que dá controle exato sobre Y de
+   cada match. Conectores SVG ficam triviais e sempre alinhados,
+   independente de regras CSS conflitantes em outras camadas.
    ================================================== */
 
 const ROUND_LABELS = {
+  R128: 'R128',
   R64: 'R64',
   R32: 'R32',
   R16: 'Oitavas de Final',
@@ -11,6 +15,11 @@ const ROUND_LABELS = {
   SF: 'Semifinal',
   F: 'Final',
 };
+
+// Espaçamento base entre matches do round mais à esquerda (R1).
+// Outros rounds calculam relativo a este.
+const BASE_GAP = 28;
+const ADD_BTN_HEIGHT = 44; // espaço pro "+ Match em..." (edit mode)
 
 function hashStr(s) {
   let h = 0;
@@ -76,7 +85,9 @@ function renderMatch(match) {
     ? `${fmtDate(match.date)} às ${match.time}hs`
     : match.isBye ? '' : 'A definir';
 
-  const optionsCount = match.winner ? '1' : (match.p1 && match.p2 ? '0' : '0');
+  // Walkover/lesão chip — se walkover_reason setado, mostra
+  const walkoverChip = match.walkover_reason
+    ? `<span class="walkover-chip" title="Walkover">${match.walkover_reason}</span>` : '';
 
   // Calculate sets won for the dropdown indicator
   let setsP1 = 0, setsP2 = 0;
@@ -93,7 +104,7 @@ function renderMatch(match) {
     <div class="bk-match" data-match-id="${match.id}"${match.winner ? ' data-has-winner="true"' : ''}>
       <div class="bk-match-head">
         <div class="bk-trophy">#${match.n} • ${roundLabel}</div>
-        <div class="bk-options">${headerCount}</div>
+        <div class="bk-options">${walkoverChip}${headerCount}</div>
       </div>
       ${renderPlayerRow(match.p1, match.scores, p1IsWinner, match.isBye, 0)}
       ${renderPlayerRow(match.p2, match.scores, p2IsWinner, match.isBye, 1)}
@@ -129,7 +140,7 @@ function renderBracket(bracket, container) {
     </div>
   `;
 
-  // Conteúdo das rodadas
+  // Conteúdo das rodadas (matches são posicionados via JS - position:absolute)
   const roundsHTML = rounds.map((roundName, ri) => {
     const matches = bracket.matches[roundName] || [];
     return `
@@ -143,60 +154,153 @@ function renderBracket(bracket, container) {
     ${headerHTML}
     <div class="bracket" id="bracket-inner">
       ${roundsHTML}
-      <svg class="bracket-svg" id="bracket-svg"></svg>
+      <svg class="bracket-svg" id="bracket-svg" aria-hidden="true"></svg>
     </div>
   `;
 
-  // Layout SÍNCRONO: leitura de scrollWidth/getBoundingClientRect já força
-  // reflow, então não precisamos de RAF. RAF é flaky em iframes throttled
-  // (preview, background tabs, mobile com page hidden) e era a causa real
-  // dos conectores não aparecerem.
+  // Layout síncrono — calcula altura dos matches reais e posiciona absoluto.
   layoutBracket(container);
-  // Re-tenta uma vez após font/paint ter settled, pra cobrir casos onde
-  // primeira medição saiu com scrollWidth=0 (raro, mas blindagem).
-  if (container.querySelector('#bracket-inner')?.scrollWidth === 0) {
-    setTimeout(() => layoutBracket(container), 80);
+
+  // Re-tenta após fonts settled (raro precisar, mas blindagem)
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => {
+      // Apenas re-layout se container ainda existe no DOM
+      if (container.isConnected) layoutBracket(container);
+    }).catch(() => {});
   }
 
-  // Observers: redesenha conectores quando layout muda (resize, fontes carregam,
-  // edit mode muda matches, etc). Idempotente — substitui observers anteriores.
+  // Observers: redesenha quando layout muda (resize, edit mode, drag-drop, etc)
   attachBracketObservers(container);
 }
 
+/* layoutBracket: posiciona TODO match com position:absolute em coordenadas
+   calculadas. Cada round[ri] tem N matches, e o match[i] do round[ri] é
+   o "vencedor" das matches[i*2] e matches[i*2+1] do round[ri-1]. Pra que o
+   match no round seguinte fique exatamente no MEIO dos dois que o alimentam,
+   calculamos: y(match[i] @ round[ri]) = (y(match[2i] @ round[ri-1]) + y(match[2i+1] @ round[ri-1])) / 2
+
+   Isso é equivalente à fórmula clássica: paddingTop e gap dobram a cada round.
+   Vantagem do absolute: não depende de gap/padding-top do flex (que CSS pode
+   sobrescrever via !important), e o admin "+ Match" não bagunça posições. */
 function layoutBracket(container) {
   const inner = container.querySelector('#bracket-inner');
   if (!inner) return;
 
-  const rounds = inner.querySelectorAll('.bracket-round');
+  const rounds = Array.from(inner.querySelectorAll('.bracket-round'));
   if (!rounds.length) return;
 
-  // Mede altura real do primeiro card pra calcular gaps com precisão
+  // Mede altura real do PRIMEIRO card pra calcular gaps com precisão.
+  // Como ainda não sabemos a altura final (cards usam content-based sizing),
+  // tornamos os matches "livres" temporariamente, medimos, e então aplicamos
+  // posicionamento absoluto.
   const firstMatch = inner.querySelector('.bk-match');
-  const matchHeight = firstMatch ? firstMatch.offsetHeight : 130;
-  const baseGap = 28; // gap base entre matches da R1
+  if (!firstMatch) return;
 
-  // Calcula gaps de cada rodada
-  rounds.forEach((round, ri) => {
-    if (ri === 0) {
-      round.style.gap = `${baseGap}px`;
-      round.style.paddingTop = '0px';
-    } else {
-      const gap = (matchHeight + baseGap) * Math.pow(2, ri) - matchHeight;
-      const padding = ((matchHeight + baseGap) * Math.pow(2, ri) - matchHeight) / 2 - baseGap / 2;
-      round.style.gap = `${gap}px`;
-      round.style.paddingTop = `${padding}px`;
-    }
-    round.style.display = 'flex';
-    round.style.flexDirection = 'column';
+  // Reset: tira posicionamento absoluto antes de medir
+  inner.querySelectorAll('.bk-match').forEach(m => {
+    m.style.position = '';
+    m.style.top = '';
+    m.style.left = '';
+  });
+  rounds.forEach(r => {
+    r.style.position = '';
+    r.style.height = '';
   });
 
-  // Desenhar conectores SVG (síncrono, agora que dimensões estão certas)
+  // Mede altura real
+  const matchHeight = firstMatch.offsetHeight || 130;
+  const baseGap = BASE_GAP;
+
+  // Calcula posições Y dos matches em CADA round
+  const yPositions = []; // yPositions[ri][mi] = topPx
+  rounds.forEach((roundEl, ri) => {
+    const matches = roundEl.querySelectorAll('.bk-match');
+    yPositions[ri] = [];
+    if (ri === 0) {
+      // Round mais à esquerda: matches empilhados com gap baseGap
+      for (let mi = 0; mi < matches.length; mi++) {
+        yPositions[ri][mi] = mi * (matchHeight + baseGap);
+      }
+    } else {
+      // Round derivado: cada match[mi] está no MEIO de matches[mi*2] e matches[mi*2+1]
+      // do round anterior. Se não tem match alimentador (caso de R32 sem R64 vindo),
+      // cai no fallback de gap dobrado.
+      const prevYs = yPositions[ri - 1];
+      const prevCount = prevYs.length;
+      for (let mi = 0; mi < matches.length; mi++) {
+        const fa = mi * 2;
+        const fb = mi * 2 + 1;
+        if (prevYs[fa] != null && prevYs[fb] != null) {
+          // Centro entre os dois alimentadores (em coordenada de TOP, então
+          // o centro do match novo deve estar no centro dos dois antigos)
+          const centerA = prevYs[fa] + matchHeight / 2;
+          const centerB = prevYs[fb] + matchHeight / 2;
+          const targetCenter = (centerA + centerB) / 2;
+          yPositions[ri][mi] = targetCenter - matchHeight / 2;
+        } else if (prevYs[fa] != null) {
+          // Apenas um alimentador (BYE estrutural ou bracket assimétrico)
+          yPositions[ri][mi] = prevYs[fa];
+        } else {
+          // Fallback puro de spacing dobrado
+          const gap = (matchHeight + baseGap) * Math.pow(2, ri) - matchHeight;
+          const padding = ((matchHeight + baseGap) * Math.pow(2, ri) - matchHeight) / 2 - baseGap / 2;
+          yPositions[ri][mi] = padding + mi * (matchHeight + gap);
+        }
+      }
+    }
+  });
+
+  // Aplica position:absolute em cada match com Y calculado.
+  // Pra altura do round, pegamos o ÚLTIMO match top + matchHeight + um pad pro
+  // botão "+ Match em..." caber se em edit mode.
+  let maxRoundHeight = 0;
+  rounds.forEach((roundEl, ri) => {
+    const matches = roundEl.querySelectorAll('.bk-match');
+    roundEl.style.position = 'relative';
+    roundEl.style.display = 'block';      // sai do flex
+    roundEl.style.gap = '';                // limpa qualquer override
+    roundEl.style.paddingTop = '';
+    matches.forEach((m, mi) => {
+      m.style.position = 'absolute';
+      m.style.top = `${yPositions[ri][mi]}px`;
+      m.style.left = '0';
+      m.style.right = '0';
+    });
+    const lastY = yPositions[ri].length
+      ? yPositions[ri][yPositions[ri].length - 1] + matchHeight
+      : matchHeight;
+    const heightWithBtn = lastY + ADD_BTN_HEIGHT;
+    roundEl.style.height = `${heightWithBtn}px`;
+    if (heightWithBtn > maxRoundHeight) maxRoundHeight = heightWithBtn;
+  });
+
+  // Garante que o inner tem altura suficiente pra TUDO (necessário pra SVG cobrir)
+  inner.style.minHeight = `${maxRoundHeight}px`;
+
+  // Posiciona "+ Match em..." (botão de edit mode) no fim de cada round,
+  // já que mudamos pra position:absolute (do contrário ele encavala nos matches).
+  rounds.forEach((roundEl, ri) => {
+    const addBtn = roundEl.querySelector('.add-match-btn');
+    if (addBtn) {
+      const matches = roundEl.querySelectorAll('.bk-match');
+      const lastY = matches.length
+        ? yPositions[ri][matches.length - 1] + matchHeight + 8
+        : 8;
+      addBtn.style.position = 'absolute';
+      addBtn.style.top = `${lastY}px`;
+      addBtn.style.left = '0';
+      addBtn.style.right = '0';
+    }
+  });
+
+  // Desenha conectores agora que tudo está posicionado
   drawConnectors(container);
 }
 
-/* Síncrono: assume que o caller já garantiu que layout está settled.
-   Calcula bounding rects de cada match card e desenha paths SVG conectando
-   match[mi*2], match[mi*2+1] no round atual → match[mi] no round seguinte. */
+/* Síncrono: assume que layoutBracket já posicionou tudo. Mede via
+   getBoundingClientRect (consistente com posicionamento absoluto) e desenha
+   paths conectando match[mi*2] e match[mi*2+1] do round atual ao match[mi]
+   do próximo round. */
 function drawConnectors(container) {
   const inner = container.querySelector('#bracket-inner');
   const svg = container.querySelector('#bracket-svg');
@@ -204,8 +308,8 @@ function drawConnectors(container) {
 
   const innerRect = inner.getBoundingClientRect();
   const w = inner.scrollWidth;
-  const h = inner.scrollHeight;
-  if (w === 0 || h === 0) return; // ainda não pronto, observer vai chamar de novo
+  const h = Math.max(inner.scrollHeight, parseFloat(inner.style.minHeight) || 0);
+  if (w === 0 || h === 0) return;
 
   svg.setAttribute('width', w);
   svg.setAttribute('height', h);
@@ -240,14 +344,20 @@ function drawConnectors(container) {
       const m2Won = m2 && m2.dataset.hasWinner === 'true';
       const wcls = won => won ? ' class="winner-path"' : '';
 
+      // horizontal saindo de m1 → midX
       paths.push(`<path d="M ${x1} ${y1} H ${midX}"${wcls(m1Won)}/>`);
 
       if (r2) {
         const y2 = r2.top + r2.height / 2 - innerRect.top;
+        // horizontal saindo de m2 → midX
         paths.push(`<path d="M ${x1} ${y2} H ${midX}"${wcls(m2Won)}/>`);
+        // vertical entre m1 e m2 em midX
         paths.push(`<path d="M ${midX} ${y1} V ${y2}"/>`);
       }
 
+      // horizontal de midX → target. O winner-class aqui marca o trajeto
+      // pra rastrear "quem chegou" — se um dos lados tinha winner, o trajeto
+      // pintado em cor de marca cobre R64→Final.
       paths.push(`<path d="M ${midX} ${yt} H ${xt}"${wcls(m1Won || m2Won)}/>`);
     }
   }
@@ -272,25 +382,46 @@ function attachBracketObservers(container) {
 
   // Throttle simples via setTimeout (não usa RAF — flaky em iframes/background)
   let scheduled = null;
+  // Flag pra evitar loop: layoutBracket muda style dos matches, o que dispara
+  // MutationObserver de novo. Trate só MutationObserver mudanças de subtree de
+  // childList, e ignore mudanças de attributes que vieram do próprio JS.
+  let inLayout = false;
   const redraw = () => {
+    if (inLayout) return;
     if (scheduled) return;
     scheduled = setTimeout(() => {
       scheduled = null;
       const live = container.querySelector('#bracket-inner');
-      if (live) layoutBracket(container);
-    }, 16); // ~1 frame
+      if (live) {
+        inLayout = true;
+        try { layoutBracket(container); }
+        finally { inLayout = false; }
+      }
+    }, 16);
   };
 
   const ro = new ResizeObserver(redraw);
+  // Observe inner E o primeiro match (pra detectar mudança de altura de card)
   ro.observe(inner);
 
-  const mo = new MutationObserver(redraw);
+  // Observa childList (novos matches via edit mode) e data-has-winner
+  // (winner muda → re-pinta winner-path).
+  const mo = new MutationObserver((muts) => {
+    let needs = false;
+    for (const mut of muts) {
+      if (mut.type === 'childList') { needs = true; break; }
+      if (mut.type === 'attributes' && mut.attributeName === 'data-has-winner') {
+        needs = true; break;
+      }
+    }
+    if (needs) redraw();
+  });
   mo.observe(inner, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-has-winner'] });
 
   _bracketObservers.set(container, { ro, mo });
 }
 
-/* Re-layout em resize de janela (fallback além do ResizeObserver) */
+/* Re-layout em resize de janela (fallback além do ResizeObserver). */
 window.addEventListener('resize', () => {
   document.querySelectorAll('.bracket-scroll').forEach(c => layoutBracket(c));
 });

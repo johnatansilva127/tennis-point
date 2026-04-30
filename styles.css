@@ -1084,20 +1084,19 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 }
 .bk-h2h:hover { color: var(--brand); }
 
-/* ============ CONECTORES SVG ============ */
+/* ============ CONECTORES SVG ============
+   width/height são definidos via JS em pixels (matching scrollWidth/Height
+   do .bracket), pra cobrir TODA a árvore inclusive o que está fora do
+   viewport com scroll. Não use width/height 100% aqui — isso clipa pro
+   tamanho do container visível. */
 .bracket-svg {
   position: absolute;
   top: 0; left: 0;
-  width: 100%; height: 100%;
   pointer-events: none;
   z-index: 1;
+  overflow: visible;
 }
-.bracket-svg path {
-  fill: none;
-  stroke: var(--bk-border-strong);
-  stroke-width: 1.5;
-  opacity: 0.6;
-}
+/* Regras visuais dos paths estão no override mais abaixo (~linha 1868) */
 
 /* Estado vazio */
 .bracket-empty {
@@ -1862,33 +1861,31 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 }
 
 /* Conectores SVG entre rounds: BEM visíveis pra rastrear R64 → Final.
-   Caminho neutro (sem winner): cinza claro, contraste com fundo escuro,
-   sem competir com winners. Caminho de winner: full brand lime com
-   drop-shadow pra "iluminar" o trajeto vencedor de ponta a ponta. */
+   Caminho neutro (sem winner): branco translúcido, contraste com fundo escuro.
+   Caminho de winner: full brand lime com drop-shadow pra "iluminar" o trajeto
+   vencedor de ponta a ponta. */
 .bracket-svg path {
   fill: none;
-  stroke: rgba(255, 255, 255, 0.4) !important;
-  stroke-width: 3 !important;
-  stroke-opacity: 1 !important;
-  opacity: 1 !important;
+  stroke: rgba(255, 255, 255, 0.45);
+  stroke-width: 3;
   stroke-linecap: round;
   stroke-linejoin: round;
   filter: drop-shadow(0 0 2px rgba(200, 255, 61, 0.15));
 }
 .bracket-svg path.winner-path {
-  stroke: rgb(200, 255, 61) !important;
-  stroke-width: 4 !important;
-  stroke-opacity: 1 !important;
+  stroke: rgb(200, 255, 61);
+  stroke-width: 4;
   filter: drop-shadow(0 0 4px rgba(200, 255, 61, 0.55))
           drop-shadow(0 0 1px rgba(200, 255, 61, 0.85));
 }
 @media (max-width: 480px) {
-  .bracket-svg path { stroke-width: 2.5 !important; }
-  .bracket-svg path.winner-path { stroke-width: 3 !important; }
+  .bracket-svg path { stroke-width: 2.5; }
+  .bracket-svg path.winner-path { stroke-width: 3; }
 }
 
-/* Espaço vertical entre cards de matches no R1 */
-.bracket-round { gap: 32px !important; }    /* base: era 28px (vinha de JS), padroniza maior */
+/* Bracket round: posicionamento dos matches é feito por JS (position:absolute
+   em layoutBracket), pra controle exato dos Y. NÃO defina gap/padding-top
+   aqui — JS tem que conseguir setar via inline style sem !important. */
 
 /* Badge de winner ✓ maior */
 .bk-player-status.win {
