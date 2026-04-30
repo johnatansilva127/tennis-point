@@ -1790,3 +1790,104 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   opacity: 0.7;
 }
 
+/* ==================================================
+   BRACKETS: melhor visibilidade (v4.6)
+   Aumenta peso/tamanho de nomes e scores, contraste, espaçamento.
+   ================================================== */
+.bk-player-name {
+  font-size: 14.5px !important;
+  font-weight: 700 !important;
+  color: #ffffff !important;
+  letter-spacing: -0.1px;
+}
+.bk-player-row:not(.winner):not(.bye) .bk-player-name {
+  color: #d1d5db !important;        /* loser: cinza claro mais legível */
+  font-weight: 600 !important;
+}
+.bk-player-row.winner .bk-player-name {
+  color: #ffffff !important;
+}
+
+/* Score: maiores e bolder */
+.bk-score {
+  min-width: 30px !important;
+  height: 34px !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  color: #9ca3af !important;
+}
+.bk-score.winner {
+  background: var(--brand) !important;
+  color: var(--brand-text) !important;
+  font-weight: 800 !important;
+}
+
+/* Match header (#1 • R32) maior + cor de marca */
+.bk-match-head {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.4px;
+  padding: 9px 12px !important;
+}
+.bk-match-head .bk-trophy {
+  color: var(--brand) !important;
+  font-weight: 800;
+}
+
+/* Round labels (R64, R32, etc): maior + cor marca */
+.bracket-round-label {
+  font-size: 14px !important;
+  font-weight: 800 !important;
+  color: var(--brand) !important;
+  letter-spacing: 0.5px;
+}
+
+/* Cards: hover/focus mais perceptível */
+.bk-match {
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+.bk-match:hover {
+  transform: translateY(-1px);
+  border-color: var(--brand) !important;
+  box-shadow: 0 6px 20px rgba(200, 255, 61, 0.18) !important;
+}
+
+/* Avatares maiores */
+.bk-player-row .avatar {
+  width: 34px !important;
+  height: 34px !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  margin-right: 12px !important;
+}
+
+/* Conectores SVG: mais grossos e visíveis */
+.bracket-svg path {
+  stroke-width: 2 !important;
+  opacity: 0.85 !important;
+  stroke: var(--bk-border-strong) !important;
+}
+
+/* Espaço vertical entre cards de matches no R1 */
+.bracket-round { gap: 32px !important; }    /* base: era 28px (vinha de JS), padroniza maior */
+
+/* Badge de winner ✓ maior */
+.bk-player-status.win {
+  width: 16px !important; height: 16px !important;
+  font-size: 10px !important;
+  background: var(--brand) !important;
+  color: var(--brand-text) !important;
+}
+.bk-player-status.loss {
+  width: 16px !important; height: 16px !important;
+  font-size: 10px !important;
+}
+
+/* Walkover/lesão: chip amarelo destacado */
+.bk-match-foot {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  padding: 8px 12px !important;
+}
+
+
