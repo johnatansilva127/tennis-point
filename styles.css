@@ -2161,37 +2161,12 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 }
 
 /* ==================================================
-   v4.11.0 — DRAG LIVRE (X,Y) + REORDER de matches
+   v4.11.0 — DRAG LIVRE (X,Y) + handle em cada match
+   COMPATÍVEL com layout em colunas (.bracket-round).
+   Usa TRANSFORM pra mover sem quebrar o flow original.
    ================================================== */
 
-/* Canvas único: TODOS os matches num plano absoluto */
-.bracket.bracket-canvas {
-  position: relative;
-  display: block;
-  min-width: 100%;
-  padding: 16px;
-}
-
-.bracket-canvas .bk-match {
-  position: absolute;
-  width: 320px;
-  transition: box-shadow 0.18s ease;
-  user-select: none;
-}
-
-/* Match com posição custom (admin moveu): mostra um indicador sutil */
-.bracket-canvas .bk-match.has-custom-pos::before {
-  content: '';
-  position: absolute;
-  top: -1px; right: -1px;
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: var(--brand);
-  box-shadow: 0 0 8px rgba(200,255,61,0.6);
-  z-index: 2;
-}
-
-/* Drag handle — só aparece em edit mode no admin */
+/* Drag handle — visível só em edit mode no admin */
 .bk-drag-handle {
   position: absolute;
   top: 6px;
@@ -2204,15 +2179,16 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   border-radius: 6px;
   cursor: grab;
   color: rgba(200, 255, 61, 0.55);
-  background: rgba(200, 255, 61, 0.05);
-  border: 1px dashed rgba(200, 255, 61, 0.25);
-  z-index: 3;
-  transition: all 0.15s ease;
+  background: rgba(200, 255, 61, 0.08);
+  border: 1px dashed rgba(200, 255, 61, 0.28);
+  z-index: 4;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
   touch-action: none;
+  user-select: none;
 }
 .bk-drag-handle:hover {
   color: var(--brand);
-  background: rgba(200, 255, 61, 0.15);
+  background: rgba(200, 255, 61, 0.18);
   border-color: var(--brand);
   transform: scale(1.08);
 }
@@ -2221,30 +2197,40 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   cursor: grabbing;
 }
 
-/* Card sendo arrastado livremente */
-.bk-match.is-dragging-free {
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7), 0 0 0 2px var(--brand);
-  opacity: 0.94;
-  transition: none !important;
-  pointer-events: none;
-}
-.bk-match.is-dragging-free .bk-drag-handle {
-  pointer-events: auto;  /* só o handle continua reagindo */
-}
-
-/* Card sendo apontado como destino de reorder (mesma round) */
-.bk-match.reorder-target {
-  outline: 2px dashed var(--brand);
-  outline-offset: 4px;
-  background: rgba(200, 255, 61, 0.08);
-}
-
-/* Em edit mode, espaço extra no header pro handle */
-.bracket-canvas.edit-layout .bk-match-head {
+/* Em edit mode: empurra o header pra dar espaço pro handle */
+.bracket.edit-layout .bk-match-head {
   padding-left: 36px;
 }
 
-/* Edit mode: dica visível abaixo do toggle */
+/* Card sendo arrastado livremente */
+.bk-match.is-dragging-free {
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.7), 0 0 0 2px var(--brand) !important;
+  opacity: 0.96;
+  transition: none !important;
+}
+
+/* Match com posição custom (admin moveu): indicador discreto */
+.bk-match.has-custom-pos::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--brand);
+  box-shadow: 0 0 8px rgba(200,255,61,0.6);
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* Reorder target highlight */
+.bk-match.reorder-target {
+  outline: 2px dashed var(--brand);
+  outline-offset: 4px;
+}
+
+/* Hint embaixo do toggle de edit mode */
 .edit-mode-hint {
   margin-top: 8px;
   padding: 8px 12px;
@@ -2255,16 +2241,14 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   color: var(--text-muted);
   line-height: 1.5;
 }
-.edit-mode-hint .emh-tip { display: block; }
 .edit-mode-hint b { color: var(--brand); font-weight: 700; }
 
-/* Toolbar: agrupa ações */
+/* Toolbar: agrupa ações (Resetar + Re-sortear) */
 .bracket-toolbar-actions {
   display: flex;
   gap: 8px;
   align-items: center;
 }
-
 .bracket-action-reset {
   background: rgba(255, 100, 100, 0.08) !important;
   border-color: rgba(255, 100, 100, 0.4) !important;
@@ -2274,24 +2258,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   background: rgba(255, 100, 100, 0.18) !important;
 }
 
-/* Drop zones por round (visualização sutil em edit mode) */
-.bk-round-dropzone {
-  pointer-events: none;
-  border-left: 1px dashed rgba(200, 255, 61, 0.06);
-  border-right: 1px dashed rgba(200, 255, 61, 0.06);
-}
-
-/* Header dos rounds em modo canvas — labels posicionados absolute */
-.bracket-canvas-on-header .bracket-rounds-header {
-  position: relative;
-  height: 36px;
-  margin-bottom: 8px;
-}
-.bracket-rounds-header .bracket-round-label[data-round-idx] {
-  text-align: center;
-}
-
-/* Pílula de "Salvo" — feedback discreto após auto-save */
+/* Pílula "Salvo" — feedback discreto após auto-save */
 .bk-saved-pill {
   position: fixed;
   bottom: 24px;
@@ -2330,182 +2297,8 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   50% { opacity: 0.4; }
 }
 
-/* Mobile: ajustes pra drag livre em touch */
+/* Mobile: handle um pouco maior pra touch */
 @media (max-width: 720px) {
-  .bracket-canvas .bk-match { width: 280px; }
   .bk-drag-handle { width: 28px; height: 28px; }
-  .bracket-canvas.edit-layout .bk-match-head { padding-left: 40px; }
-}
-
-
-/* ==================================================
-   v4.11.0 — DRAG LIVRE (X,Y) + REORDER de matches
-   ================================================== */
-
-/* Canvas único: TODOS os matches num plano absoluto */
-.bracket.bracket-canvas {
-  position: relative;
-  display: block;
-  min-width: 100%;
-  padding: 16px;
-}
-
-.bracket-canvas .bk-match {
-  position: absolute;
-  width: 320px;
-  transition: box-shadow 0.18s ease;
-  user-select: none;
-}
-
-/* Match com posição custom (admin moveu): mostra um indicador sutil */
-.bracket-canvas .bk-match.has-custom-pos::before {
-  content: '';
-  position: absolute;
-  top: -1px; right: -1px;
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: var(--brand);
-  box-shadow: 0 0 8px rgba(200,255,61,0.6);
-  z-index: 2;
-}
-
-/* Drag handle — só aparece em edit mode no admin */
-.bk-drag-handle {
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  cursor: grab;
-  color: rgba(200, 255, 61, 0.55);
-  background: rgba(200, 255, 61, 0.05);
-  border: 1px dashed rgba(200, 255, 61, 0.25);
-  z-index: 3;
-  transition: all 0.15s ease;
-  touch-action: none;
-}
-.bk-drag-handle:hover {
-  color: var(--brand);
-  background: rgba(200, 255, 61, 0.15);
-  border-color: var(--brand);
-  transform: scale(1.08);
-}
-.bk-drag-handle:active,
-.bk-match.is-dragging-free .bk-drag-handle {
-  cursor: grabbing;
-}
-
-/* Card sendo arrastado livremente */
-.bk-match.is-dragging-free {
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7), 0 0 0 2px var(--brand);
-  opacity: 0.94;
-  transition: none !important;
-  pointer-events: none;
-}
-.bk-match.is-dragging-free .bk-drag-handle {
-  pointer-events: auto;
-}
-
-/* Card sendo apontado como destino de reorder (mesma round) */
-.bk-match.reorder-target {
-  outline: 2px dashed var(--brand);
-  outline-offset: 4px;
-  background: rgba(200, 255, 61, 0.08);
-}
-
-/* Em edit mode, espaço extra no header pro handle */
-.bracket-canvas.edit-layout .bk-match-head {
-  padding-left: 36px;
-}
-
-/* Edit mode: dica visível abaixo do toggle */
-.edit-mode-hint {
-  margin-top: 8px;
-  padding: 8px 12px;
-  background: rgba(200, 255, 61, 0.06);
-  border: 1px solid rgba(200, 255, 61, 0.2);
-  border-radius: 8px;
-  font-size: 12.5px;
-  color: var(--text-muted);
-  line-height: 1.5;
-}
-.edit-mode-hint .emh-tip { display: block; }
-.edit-mode-hint b { color: var(--brand); font-weight: 700; }
-
-/* Toolbar: agrupa ações */
-.bracket-toolbar-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.bracket-action-reset {
-  background: rgba(255, 100, 100, 0.08) !important;
-  border-color: rgba(255, 100, 100, 0.4) !important;
-  color: #ff8585 !important;
-}
-.bracket-action-reset:hover {
-  background: rgba(255, 100, 100, 0.18) !important;
-}
-
-/* Drop zones por round (visualização sutil em edit mode) */
-.bk-round-dropzone {
-  pointer-events: none;
-  border-left: 1px dashed rgba(200, 255, 61, 0.06);
-  border-right: 1px dashed rgba(200, 255, 61, 0.06);
-}
-
-/* Header dos rounds em modo canvas — labels posicionados absolute */
-.bracket-rounds-header .bracket-round-label[data-round-idx] {
-  text-align: center;
-}
-
-/* Pílula de "Salvo" — feedback discreto após auto-save */
-.bk-saved-pill {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  background: rgba(20, 20, 22, 0.96);
-  border: 1px solid rgba(200, 255, 61, 0.4);
-  color: var(--brand);
-  padding: 8px 14px;
-  border-radius: 999px;
-  font-size: 12.5px;
-  font-weight: 700;
-  letter-spacing: 0.3px;
-  z-index: 9000;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  opacity: 0;
-  transform: translateY(8px);
-  transition: opacity 0.18s ease, transform 0.18s ease;
-  pointer-events: none;
-  box-shadow: 0 8px 20px rgba(0,0,0,0.4);
-}
-.bk-saved-pill.show {
-  opacity: 1;
-  transform: translateY(0);
-}
-.bk-saved-pill .bsp-dot {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: var(--brand);
-  box-shadow: 0 0 8px var(--brand);
-  animation: bsp-pulse 1s ease-in-out infinite;
-}
-@keyframes bsp-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-
-/* Mobile: ajustes pra drag livre em touch */
-@media (max-width: 720px) {
-  .bracket-canvas .bk-match { width: 280px; }
-  .bk-drag-handle { width: 28px; height: 28px; }
-  .bracket-canvas.edit-layout .bk-match-head { padding-left: 40px; }
+  .bracket.edit-layout .bk-match-head { padding-left: 40px; }
 }

@@ -748,42 +748,49 @@ function bindBracketFreeDrag(host) {
       const matchId = card.dataset.matchId;
       const innerRect = inner.getBoundingClientRect();
       const cardRect = card.getBoundingClientRect();
-      // offset do click dentro do card
+      // posição NATURAL do card relativa ao inner (sem transform)
+      // mede com transform desligado pra pegar a base "natural"
+      const prevTransform = card.style.transform;
+      card.style.transform = '';
+      const naturalRect = card.getBoundingClientRect();
+      const naturalX = naturalRect.left - innerRect.left;
+      const naturalY = naturalRect.top - innerRect.top;
+      // restaura transform pra não pular visualmente antes do drag começar
+      card.style.transform = prevTransform;
+      // offset do click dentro do card (na posição atual com transform)
       const offsetX = e.clientX - cardRect.left;
       const offsetY = e.clientY - cardRect.top;
 
       card.classList.add('is-dragging-free');
       card.style.zIndex = '999';
-      handle.setPointerCapture(e.pointerId);
+      try { handle.setPointerCapture(e.pointerId); } catch(_) {}
 
-      let lastX = parseFloat(card.style.left) || 0;
-      let lastY = parseFloat(card.style.top) || 0;
+      let lastX = naturalX, lastY = naturalY;
 
       const onMove = (ev) => {
         const innerRectNow = inner.getBoundingClientRect();
+        // posição absoluta desejada do card (canto superior-esquerdo)
         let nx = ev.clientX - innerRectNow.left - offsetX + inner.scrollLeft;
         let ny = ev.clientY - innerRectNow.top - offsetY + inner.scrollTop;
-        // snap to grid
         nx = Math.round(nx / 8) * 8;
         ny = Math.round(ny / 8) * 8;
-        // clamp >= 0
         if (nx < 0) nx = 0;
         if (ny < 0) ny = 0;
-        card.style.left = `${nx}px`;
-        card.style.top = `${ny}px`;
+        // calcula deslocamento sobre a posição natural e aplica via transform
+        const dx = nx - naturalX;
+        const dy = ny - naturalY;
+        card.style.transform = `translate(${dx}px, ${dy}px)`;
         lastX = nx; lastY = ny;
-        // redesenha conectores em tempo real (debounced via rAF)
         scheduleConnectorRedraw(host);
       };
       const onUp = (ev) => {
-        handle.releasePointerCapture(e.pointerId);
+        try { handle.releasePointerCapture(e.pointerId); } catch(_) {}
         handle.removeEventListener('pointermove', onMove);
         handle.removeEventListener('pointerup', onUp);
         handle.removeEventListener('pointercancel', onUp);
         card.classList.remove('is-dragging-free');
-        card.style.zIndex = '';
+        card.style.zIndex = '5';
         card.classList.add('has-custom-pos');
-        // Persiste a nova posição custom
         persistCustomPosition(matchId, lastX, lastY);
       };
       handle.addEventListener('pointermove', onMove);
