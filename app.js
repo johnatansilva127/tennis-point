@@ -10,6 +10,8 @@ let drawState = { players: [], seeds: [] };
 let bracketEditMode = false;          // toggle global modo edição de chave (admin)
 let _realtimeBracketChannel = null;   // subscription ativa (Realtime brackets)
 let _realtimeNotifChannel   = null;   // subscription de notificações
+let _bracketSaveTimer = null;         // debounce do auto-save (drag-and-drop)
+let _bracketSavePending = null;       // promessa do save em curso (evita corrida)
 
 /* -------- Init -------- */
 document.addEventListener('DOMContentLoaded', async () => {
@@ -600,9 +602,14 @@ function renderTournament() {
         ${STATE.user?.role === 'admin' ? `
           <div class="edit-mode-toggle">
             <label class="switch-row">
-              <span>✏️ Modo Edição (clique nos slots pra trocar jogador)</span>
+              <span>✏️ Modo Edição — arraste matches livremente, troque jogadores entre slots</span>
               <span class="switch ${bracketEditMode ? 'on' : ''}" data-toggle-edit-mode></span>
             </label>
+            ${bracketEditMode ? `
+              <div class="edit-mode-hint">
+                <span class="emh-tip">💡 <b>Pegue na alça ⋮⋮</b> pra mover o match · <b>Arraste um jogador</b> pra trocar slot · Tudo é salvo automático.</span>
+              </div>
+            ` : ''}
           </div>
         ` : ''}
         <div class="bracket-scroll ${bracketEditMode ? 'edit-mode' : ''}" id="bracket-host"></div>
@@ -710,12 +717,246 @@ function bindTournament() {
       renderBracket(STATE.brackets[currentBracketCategory], host);
       if (bracketEditMode && STATE.user?.role === 'admin') {
         bindBracketEditModeClicks();
+        bindBracketFreeDrag(host);
+        bindMatchReorder(host);
       } else {
         bindBracketAdminClicks();
       }
       bindBracketSortActions();
+      bindBracketLayoutActions(host);
     }
   }
+}
+
+/* ===========================================================
+   DRAG-LIVRE de matches (pointer events) — admin edit mode
+   Permite mover qualquer match pra qualquer X,Y do canvas.
+   Persiste em bracket.customPositions = { matchId: {x,y} }.
+   =========================================================== */
+function bindBracketFreeDrag(host) {
+  if (!host || !STATE.user || STATE.user.role !== 'admin') return;
+  const inner = host.querySelector('#bracket-inner');
+  if (!inner) return;
+
+  const handles = inner.querySelectorAll('.bk-drag-handle');
+  handles.forEach(handle => {
+    handle.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const card = handle.closest('.bk-match');
+      if (!card) return;
+      const matchId = card.dataset.matchId;
+      const innerRect = inner.getBoundingClientRect();
+      const cardRect = card.getBoundingClientRect();
+      // offset do click dentro do card
+      const offsetX = e.clientX - cardRect.left;
+      const offsetY = e.clientY - cardRect.top;
+
+      card.classList.add('is-dragging-free');
+      card.style.zIndex = '999';
+      handle.setPointerCapture(e.pointerId);
+
+      let lastX = parseFloat(card.style.left) || 0;
+      let lastY = parseFloat(card.style.top) || 0;
+
+      const onMove = (ev) => {
+        const innerRectNow = inner.getBoundingClientRect();
+        let nx = ev.clientX - innerRectNow.left - offsetX + inner.scrollLeft;
+        let ny = ev.clientY - innerRectNow.top - offsetY + inner.scrollTop;
+        // snap to grid
+        nx = Math.round(nx / 8) * 8;
+        ny = Math.round(ny / 8) * 8;
+        // clamp >= 0
+        if (nx < 0) nx = 0;
+        if (ny < 0) ny = 0;
+        card.style.left = `${nx}px`;
+        card.style.top = `${ny}px`;
+        lastX = nx; lastY = ny;
+        // redesenha conectores em tempo real (debounced via rAF)
+        scheduleConnectorRedraw(host);
+      };
+      const onUp = (ev) => {
+        handle.releasePointerCapture(e.pointerId);
+        handle.removeEventListener('pointermove', onMove);
+        handle.removeEventListener('pointerup', onUp);
+        handle.removeEventListener('pointercancel', onUp);
+        card.classList.remove('is-dragging-free');
+        card.style.zIndex = '';
+        card.classList.add('has-custom-pos');
+        // Persiste a nova posição custom
+        persistCustomPosition(matchId, lastX, lastY);
+      };
+      handle.addEventListener('pointermove', onMove);
+      handle.addEventListener('pointerup', onUp);
+      handle.addEventListener('pointercancel', onUp);
+    });
+  });
+}
+
+let _connectorRedrawScheduled = false;
+function scheduleConnectorRedraw(host) {
+  if (_connectorRedrawScheduled) return;
+  _connectorRedrawScheduled = true;
+  requestAnimationFrame(() => {
+    _connectorRedrawScheduled = false;
+    if (typeof window.tpRedrawConnectorsOnly === 'function') {
+      window.tpRedrawConnectorsOnly(host);
+    }
+  });
+}
+
+/* Salva posição custom no STATE e dispara save debounced no Supabase */
+function persistCustomPosition(matchId, x, y) {
+  const catId = currentBracketCategory;
+  const br = STATE.brackets[catId];
+  if (!br) return;
+  if (!br.customPositions) br.customPositions = {};
+  br.customPositions[matchId] = { x, y };
+  saveState();
+  scheduleBracketSave(catId);
+}
+
+/* Auto-save debounced (450ms) — agrupa drags rápidos em uma única chamada */
+function scheduleBracketSave(catId, opts = {}) {
+  if (_bracketSaveTimer) clearTimeout(_bracketSaveTimer);
+  const delay = opts.immediate ? 0 : 450;
+  _bracketSaveTimer = setTimeout(async () => {
+    _bracketSaveTimer = null;
+    const br = STATE.brackets[catId];
+    if (!br || !STATE._activeTournamentId) return;
+    try {
+      _bracketSavePending = TP.Brackets.updateData(STATE._activeTournamentId, catId, br);
+      await _bracketSavePending;
+      _bracketSavePending = null;
+      if (!opts.silent) toastSavedFeedback();
+    } catch (e) {
+      _bracketSavePending = null;
+      toast('⚠️ Erro ao salvar: ' + (e.message || 'falha'), 'error');
+    }
+  }, delay);
+}
+
+/* Toast discreto pra feedback de save (curto, canto) */
+let _savedToastTimer = null;
+function toastSavedFeedback() {
+  // Procura toast-saved-mini existente, atualiza ou cria
+  let pill = document.getElementById('bk-saved-pill');
+  if (!pill) {
+    pill = document.createElement('div');
+    pill.id = 'bk-saved-pill';
+    pill.className = 'bk-saved-pill';
+    pill.innerHTML = '<span class="bsp-dot"></span> Salvo';
+    document.body.appendChild(pill);
+  }
+  pill.classList.add('show');
+  if (_savedToastTimer) clearTimeout(_savedToastTimer);
+  _savedToastTimer = setTimeout(() => pill.classList.remove('show'), 1400);
+}
+
+/* Reorder de matches inteiros: drag de UM match (handle) sobre OUTRO match
+   da mesma round → swap completo (id mantido, conteúdo trocado). */
+function bindMatchReorder(host) {
+  if (!host || !STATE.user || STATE.user.role !== 'admin') return;
+  const inner = host.querySelector('#bracket-inner');
+  if (!inner) return;
+
+  // Durante drag livre, se o card ficar HOVER em outro card da mesma round,
+  // mostra indicador. No mouseup, se sobre outro card → swap.
+  // Implementação simples: tracking via pointer events globais em cada card.
+  const cards = inner.querySelectorAll('.bk-match');
+  cards.forEach(card => {
+    card.addEventListener('pointerenter', () => {
+      // Se algum outro card está com .is-dragging-free, marca este como drop target
+      const dragging = inner.querySelector('.bk-match.is-dragging-free');
+      if (dragging && dragging !== card && dragging.dataset.round === card.dataset.round) {
+        card.classList.add('reorder-target');
+      }
+    });
+    card.addEventListener('pointerleave', () => {
+      card.classList.remove('reorder-target');
+    });
+  });
+
+  // Listener global no inner: se pointerup em cima de um reorder-target → swap
+  inner.addEventListener('pointerup', (e) => {
+    const dragging = inner.querySelector('.bk-match.is-dragging-free');
+    const target = inner.querySelector('.bk-match.reorder-target');
+    if (dragging && target && dragging !== target) {
+      const aId = dragging.dataset.matchId;
+      const bId = target.dataset.matchId;
+      target.classList.remove('reorder-target');
+      // Mostra modal de confirmação
+      confirmMatchSwap(aId, bId);
+    }
+    // Limpa qualquer reorder-target solto
+    inner.querySelectorAll('.bk-match.reorder-target').forEach(c => c.classList.remove('reorder-target'));
+  }, true);
+}
+
+/* Confirma e executa swap de DOIS matches (mesmo round). Troca conteúdo
+   inteiro: p1, p2, scores, winner, isBye, walkover_reason, date, time. */
+function confirmMatchSwap(aId, bId) {
+  const catId = currentBracketCategory;
+  const br = STATE.brackets[catId];
+  if (!br) return;
+  const a = findMatchInBracket(catId, aId);
+  const b = findMatchInBracket(catId, bId);
+  if (!a || !b) return;
+  if (a.round !== b.round) {
+    toast('Só dá pra trocar matches da mesma rodada', 'info');
+    return;
+  }
+  openModal({
+    title: '🔄 Trocar matches?',
+    sub: `${a.round}: #${a.match.n} ↔ #${b.match.n}`,
+    body: `
+      <p class="muted" style="font-size:14px;margin-bottom:8px">Vai trocar o conteúdo dos dois matches (jogadores, scores, datas).</p>
+      <p class="muted" style="font-size:13px"><b>#${a.match.n}:</b> ${memberName(a.match.p1) || '(vazio)'} vs ${memberName(a.match.p2) || '(vazio)'}</p>
+      <p class="muted" style="font-size:13px"><b>#${b.match.n}:</b> ${memberName(b.match.p1) || '(vazio)'} vs ${memberName(b.match.p2) || '(vazio)'}</p>
+    `,
+    actions: [
+      { label: 'Cancelar', class: 'btn-secondary', onClick: closeModal },
+      { label: 'Trocar', class: 'btn-primary', onClick: () => doMatchSwap(catId, aId, bId) },
+    ],
+  });
+}
+
+async function doMatchSwap(catId, aId, bId) {
+  const br = STATE.brackets[catId];
+  const a = findMatchInBracket(catId, aId);
+  const b = findMatchInBracket(catId, bId);
+  if (!a || !b) { closeModal(); return; }
+  // Swap dos campos (mantém id e n)
+  const fields = ['p1','p2','scores','winner','isBye','walkover_reason','date','time'];
+  fields.forEach(f => {
+    const tmp = a.match[f];
+    a.match[f] = b.match[f];
+    b.match[f] = tmp;
+  });
+  saveState();
+  closeModal();
+  scheduleBracketSave(catId, { immediate: true });
+  toast('Matches trocados ✅', 'success');
+  navigate('tournament');
+}
+
+/* Reset de layout: apaga customPositions e volta pro auto-layout */
+function bindBracketLayoutActions(host) {
+  document.querySelectorAll('[data-action="reset-layout"]').forEach(b => {
+    b.addEventListener('click', () => {
+      const cat = STATE.categories.find(c => c.id === currentBracketCategory);
+      const ok = confirm(`Resetar o layout custom da chave de ${cat?.name || 'esta categoria'}? As posições arrastadas voltam ao automático.`);
+      if (!ok) return;
+      const br = STATE.brackets[currentBracketCategory];
+      if (br) {
+        br.customPositions = {};
+        saveState();
+        scheduleBracketSave(currentBracketCategory, { immediate: true });
+        toast('Layout resetado ✅', 'success');
+        navigate('tournament');
+      }
+    });
+  });
 }
 
 /* Atalhos de sorteio na tela do torneio (admin only) */
@@ -2456,7 +2697,6 @@ function bindAdminPlayers() {
     b.addEventListener('click', () => modalDeletePlayer(b.dataset.deletePlayer));
   });
   document.getElementById('player-search')?.addEventListener('input', e => {
-    const q = e.target.value.toLowerCase();
     document.querySelectorAll('#players-list .list-row').forEach(row => {
       const text = row.textContent.toLowerCase();
       row.style.display = text.includes(q) ? '' : 'none';
