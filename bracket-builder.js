@@ -30,14 +30,63 @@ const BUILDER_TEMPLATES = {
 
 /* Renderiza a tela do Construtor */
 function renderBracketBuilder() {
-  if (!STATE.user || STATE.user.role !== 'admin') {
-    return '<div class="screen"><h2>Acesso negado</h2></div>';
+  try {
+    return _renderBracketBuilderUnsafe();
+  } catch (err) {
+    console.error('[Construtor] Erro:', err);
+    return `
+      <div class="screen" style="padding:20px;color:#f5f5f7">
+        <button class="btn-secondary" onclick="navigate('tournament')" style="margin-bottom:16px">‹ Voltar</button>
+        <h2 style="font-family:var(--font-display);font-weight:700">⚠️ Erro no Construtor</h2>
+        <p class="muted">Algo quebrou ao tentar abrir o Construtor. Detalhes:</p>
+        <pre style="background:#1a1a1d;padding:12px;border-radius:8px;font-size:12px;overflow:auto">${(err.message || err) + '\n\n' + (err.stack || '')}</pre>
+        <p class="muted" style="margin-top:16px">Tente Ctrl+Shift+R pra forçar reload, ou volte e me avise o erro acima.</p>
+      </div>
+    `;
+  }
+}
+
+function _renderBracketBuilderUnsafe() {
+  if (typeof STATE === 'undefined' || !STATE.user) {
+    return `
+      <div class="screen" style="padding:20px;color:#f5f5f7">
+        <button class="btn-secondary" onclick="navigate('home')" style="margin-bottom:16px">‹ Início</button>
+        <h2>⏳ Carregando...</h2>
+        <p class="muted">STATE ainda não foi carregado. Tente Ctrl+Shift+R.</p>
+      </div>
+    `;
+  }
+  if (STATE.user.role !== 'admin') {
+    return `
+      <div class="screen" style="padding:20px;color:#f5f5f7">
+        <button class="btn-secondary" onclick="navigate('tournament')" style="margin-bottom:16px">‹ Voltar</button>
+        <h2>🔒 Acesso negado</h2>
+        <p class="muted">Apenas administradores podem usar o Construtor.</p>
+      </div>
+    `;
   }
 
-  const catId = BUILDER_STATE.catId || currentBracketCategory;
+  const catId = BUILDER_STATE.catId || (typeof currentBracketCategory !== 'undefined' ? currentBracketCategory : null) || (STATE.categories && STATE.categories[0] && STATE.categories[0].id);
+  if (!catId) {
+    return `
+      <div class="screen" style="padding:20px;color:#f5f5f7">
+        <button class="btn-secondary" onclick="navigate('tournament')" style="margin-bottom:16px">‹ Voltar</button>
+        <h2>⚠️ Sem categoria selecionada</h2>
+        <p class="muted">Volte ao Torneio, selecione uma categoria, e clique em Construtor.</p>
+      </div>
+    `;
+  }
   BUILDER_STATE.catId = catId;
-  const cat = STATE.categories.find(c => c.id === catId) || { name: catId, icon: '🎾' };
-  const br = STATE.brackets[catId] || _emptyBracket(catId);
+  const cat = (STATE.categories || []).find(c => c.id === catId) || { name: catId, icon: '🎾' };
+
+  // Garante que STATE.brackets[catId] existe (se não, cria vazio)
+  if (!STATE.brackets) STATE.brackets = {};
+  if (!STATE.brackets[catId]) STATE.brackets[catId] = _emptyBracket(catId);
+  const br = STATE.brackets[catId];
+  if (!br.rounds) br.rounds = [];
+  if (!br.matches) br.matches = {};
+  if (!br.entries) br.entries = [];
+  if (!br.feeders) br.feeders = {};
 
   return `
     <div class="screen builder-screen">
