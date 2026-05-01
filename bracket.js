@@ -78,14 +78,6 @@ function renderPlayerRow(memberId, scores, isWinner, isBye, idx) {
 
 function renderMatch(match, categoryLabel, isAdmin, editMode) {
   const w = match.winner;
-  const dragHandle = (isAdmin && editMode) ? `
-    <div class="bk-drag-handle" data-drag-handle title="Arrastar este match">
-      <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
-        <circle cx="5" cy="3" r="1.3"/><circle cx="11" cy="3" r="1.3"/>
-        <circle cx="5" cy="8" r="1.3"/><circle cx="11" cy="8" r="1.3"/>
-        <circle cx="5" cy="13" r="1.3"/><circle cx="11" cy="13" r="1.3"/>
-      </svg>
-    </div>` : '';
   const p1IsWinner = w ? (w === match.p1) : null;
   const p2IsWinner = w ? (w === match.p2) : null;
 
@@ -119,9 +111,11 @@ function renderMatch(match, categoryLabel, isAdmin, editMode) {
     <path d="M6.5 9.5h3v2.5h-3zM5 12.5h6v1H5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
   </svg>`;
 
+  const isByeXBye = (!match.p1 && !match.p2) || match.isBye;
+  const hideClass = isByeXBye ? ' hidden-match' : '';
+
   return `
-    <div class="bk-match" data-match-id="${match.id}" data-round="${match.round}"${match.winner ? ' data-has-winner="true"' : ''}>
-      ${dragHandle}
+    <div class="bk-match${hideClass}" data-match-id="${match.id}" data-round="${match.round}"${match.winner ? ' data-has-winner="true"' : ''}>
       <div class="bk-match-head">
         <div class="bk-trophy">
           ${trophyIcon}
@@ -187,6 +181,12 @@ function renderBracket(bracket, container) {
               <span>Resetar layout</span>
             </button>
           ` : ''}
+          <button class="bracket-action-btn bracket-action-builder" data-action="open-builder" title="Abrir Construtor de chave (admin)">
+            <svg viewBox="0 0 16 16" width="13" height="13" fill="none" aria-hidden="true">
+              <path d="M2 13l3-3 4 4-3 3H2v-4zM7 8l5-5 3 3-5 5-3-3z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span>Construtor</span>
+          </button>
           <button class="bracket-action-btn" data-action="resort-bracket" title="Re-sortear esta categoria">
             <svg viewBox="0 0 16 16" width="13" height="13" fill="none" aria-hidden="true">
               <path d="M3 6h7M10 6L7 3M10 6L7 9M13 10H6M6 10l3 3M6 10l3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -227,9 +227,11 @@ function renderBracket(bracket, container) {
 
   container.innerHTML = `
     ${headerHTML}
-    <div class="bracket${editMode ? ' edit-layout' : ''}" id="bracket-inner">
-      ${roundsHTML}
-      <svg class="bracket-svg" id="bracket-svg" aria-hidden="true"></svg>
+    <div class="bracket-scroll">
+      <div class="bracket${editMode ? ' edit-layout' : ''}" id="bracket-inner">
+        ${roundsHTML}
+        <svg class="bracket-svg" id="bracket-svg" aria-hidden="true"></svg>
+      </div>
     </div>
   `;
 
@@ -471,45 +473,81 @@ function drawConnectors(container) {
     ].join(' ');
   }
 
-  for (let ri = 0; ri < rounds.length - 1; ri++) {
-    const currentMatches = rounds[ri].querySelectorAll('.bk-match');
-    const nextMatches = rounds[ri + 1].querySelectorAll('.bk-match');
 
-    for (let mi = 0; mi < nextMatches.length; mi++) {
-      const m1 = currentMatches[mi * 2];
-      const m2 = currentMatches[mi * 2 + 1];
-      const target = nextMatches[mi];
+  // Lê bracket.feeders se disponível pra desenhar conectores baseados em
+  // ligações EXPLÍCITAS (Construtor Modular). Fallback pra mi*2 clássico.
+  let _feeders = {};
+  let _bracketData = null;
+  try {
+    const _catId = (typeof currentBracketCategory !== 'undefined') ? currentBracketCategory : null;
+    if (_catId && typeof STATE !== 'undefined' && STATE.brackets && STATE.brackets[_catId]) {
+      _bracketData = STATE.brackets[_catId];
+      _feeders = _bracketData.feeders || {};
+    }
+  } catch (e) { /* fallback silencioso */ }
 
-      if (!m1 || !target) continue;
+  const useFeeders = Object.keys(_feeders).length > 0;
 
-      const r1 = m1.getBoundingClientRect();
-      const r2 = m2 ? m2.getBoundingClientRect() : null;
-      const rt = target.getBoundingClientRect();
+  if (useFeeders) {
+    // CONSTRUTOR MODULAR: desenha linha de cada feeder pra match destino
+    const allMatches = inner.querySelectorAll('.bk-match');
+    allMatches.forEach(targetEl => {
+      if (targetEl.classList.contains('hidden-match')) return;
+      const targetId = targetEl.dataset.matchId;
+      const f = _feeders[targetId];
+      if (!f) return;
 
-      const x1 = r1.right - innerRect.left;
-      const y1 = r1.top + r1.height / 2 - innerRect.top;
+      const rt = targetEl.getBoundingClientRect();
       const xt = rt.left - innerRect.left;
       const yt = rt.top + rt.height / 2 - innerRect.top;
 
-      const midX = x1 + (xt - x1) / 2;
+      ['p1', 'p2'].forEach(slot => {
+        const fs = f[slot];
+        if (!fs || fs.type !== 'match') return;
+        const srcEl = inner.querySelector(`.bk-match[data-match-id="${fs.matchId}"]`);
+        if (!srcEl || srcEl.classList.contains('hidden-match')) return;
+        const r1 = srcEl.getBoundingClientRect();
+        const sx = r1.right - innerRect.left;
+        const sy = r1.top + r1.height / 2 - innerRect.top;
+        const midX = sx + (xt - sx) / 2;
+        const won = srcEl.dataset.hasWinner === 'true';
+        const isLoser = fs.take === 'loser';
+        const cls = won && !isLoser ? ' class="winner-path"' : (isLoser ? ' class="loser-path"' : '');
+        paths.push('<path d="' + lShapePath(sx, sy, midX, yt, xt) + '"' + cls + '/>');
+      });
+    });
+  } else {
+    // FALLBACK CLÁSSICO: mi*2, mi*2+1 → mi
+    for (let ri = 0; ri < rounds.length - 1; ri++) {
+      const currentMatches = rounds[ri].querySelectorAll('.bk-match');
+      const nextMatches = rounds[ri + 1].querySelectorAll('.bk-match');
 
-      const m1Won = m1.dataset.hasWinner === 'true';
-      const m2Won = m2 && m2.dataset.hasWinner === 'true';
+      for (let mi = 0; mi < nextMatches.length; mi++) {
+        const m1 = currentMatches[mi * 2];
+        const m2 = currentMatches[mi * 2 + 1];
+        const target = nextMatches[mi];
 
-      // Constroi uma path L continua de cada source ate o target.
-      // Render order: losers/neutros primeiro, winner por cima — garante que o
-      // trajeto vencedor (lima brilhante) fica visualmente sobre os outros.
-      const sources = [{ x: x1, y: y1, won: m1Won }];
-      if (r2) {
-        const y2 = r2.top + r2.height / 2 - innerRect.top;
-        sources.push({ x: x1, y: y2, won: m2Won });
-      }
-      // Sort: losers (false) primeiro, winners (true) depois
-      sources.sort((a, b) => (a.won ? 1 : 0) - (b.won ? 1 : 0));
+        if (!target || target.classList.contains('hidden-match')) continue;
 
-      for (const s of sources) {
-        const cls = s.won ? ' class="winner-path"' : '';
-        paths.push('<path d="' + lShapePath(s.x, s.y, midX, yt, xt) + '"' + cls + '/>');
+        const rt = target.getBoundingClientRect();
+        const xt = rt.left - innerRect.left;
+        const yt = rt.top + rt.height / 2 - innerRect.top;
+
+        const sources = [];
+        if (m1 && !m1.classList.contains('hidden-match')) {
+          const r1 = m1.getBoundingClientRect();
+          sources.push({ x: r1.right - innerRect.left, y: r1.top + r1.height / 2 - innerRect.top, won: m1.dataset.hasWinner === 'true' });
+        }
+        if (m2 && !m2.classList.contains('hidden-match')) {
+          const r2 = m2.getBoundingClientRect();
+          sources.push({ x: r2.right - innerRect.left, y: r2.top + r2.height / 2 - innerRect.top, won: m2.dataset.hasWinner === 'true' });
+        }
+
+        for (const s of sources) {
+          const midX = s.x + (xt - s.x) / 2;
+          const cls = s.won ? ' class="winner-path"' : '';
+          paths.push('<path d="' + lShapePath(s.x, s.y, midX, yt, xt) + '"' + cls + '/>');
+        }
       }
     }
   }

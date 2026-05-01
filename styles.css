@@ -2302,3 +2302,416 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   .bk-drag-handle { width: 28px; height: 28px; }
   .bracket.edit-layout .bk-match-head { padding-left: 40px; }
 }
+
+/* ======== Drag & Drop & Hide Matches ======== */
+.hidden-match {
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.bk-drag-handle {
+  cursor: grab;
+}
+
+.bk-match.is-dragging {
+  cursor: grabbing !important;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+.bk-match-head { padding-left: 36px !important; }
+
+
+
+/* ==================================================
+   v4.12.0 — CONSTRUTOR MODULAR DE CHAVE
+   ================================================== */
+
+.builder-screen {
+  background: var(--bk-bg, #0a0a0a);
+  min-height: 100vh;
+  padding: 0;
+}
+
+.builder-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 20px;
+  background: rgba(14, 14, 16, 0.96);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid #1a1a1a;
+}
+
+.builder-back {
+  background: transparent;
+  border: 1px solid #2a2a2a;
+  color: #d6ff5c;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.builder-back:hover { border-color: var(--brand); }
+
+.builder-title { display: flex; align-items: center; gap: 12px; flex: 1; }
+.builder-title h1 { margin: 0; font-size: 18px; font-weight: 700; font-family: var(--font-display); }
+.builder-icon { font-size: 20px; }
+.builder-cat-chip {
+  font-size: 12px;
+  background: rgba(200, 255, 61, 0.12);
+  color: var(--brand);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.builder-actions-right { display: flex; gap: 8px; }
+.builder-template-btn {
+  font-size: 12px;
+  padding: 7px 12px;
+}
+
+/* Body: sidebar + canvas */
+.builder-body {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 0;
+  height: calc(100vh - 64px);
+}
+
+.builder-sidebar {
+  background: #131316;
+  border-right: 1px solid #1f1f1f;
+  padding: 16px;
+  overflow-y: auto;
+}
+.builder-sidebar h3 {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: rgba(200, 255, 61, 0.7);
+  margin: 0 0 12px;
+}
+.builder-sep {
+  height: 1px;
+  background: #222;
+  margin: 24px 0 16px;
+}
+.builder-empty-hint {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Lista de rounds na sidebar */
+.builder-rounds-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.builder-round-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: #1a1a1d;
+  border: 1px solid #252528;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.brl-name { flex: 1; font-weight: 600; }
+.brl-count { font-size: 11px; color: var(--text-muted); }
+.brl-rename, .brl-add-match, .brl-remove {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  opacity: 0.65;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+.brl-rename:hover, .brl-add-match:hover, .brl-remove:hover {
+  opacity: 1;
+  background: rgba(200, 255, 61, 0.1);
+}
+.brl-remove:hover { background: rgba(220, 38, 38, 0.18); }
+
+.builder-add-round, .builder-add-entry {
+  margin-top: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  background: rgba(200, 255, 61, 0.08);
+  border: 1.5px dashed rgba(200, 255, 61, 0.4);
+  border-radius: 8px;
+  color: var(--brand);
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.builder-add-round:hover, .builder-add-entry:hover {
+  background: rgba(200, 255, 61, 0.18);
+}
+
+/* Lista de jogadores na sidebar */
+.builder-entries-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.builder-entry-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: #1a1a1d;
+  border: 1px solid #252528;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: grab;
+  user-select: none;
+}
+.builder-entry-item:hover {
+  border-color: rgba(200, 255, 61, 0.4);
+}
+.builder-entry-item.dragging { opacity: 0.4; }
+.bei-avatar {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  background: #2a2a2e;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700;
+}
+.bei-name { flex: 1; }
+
+/* Canvas: grid de rounds */
+.builder-canvas {
+  overflow: auto;
+  padding: 24px;
+}
+.builder-canvas-empty {
+  text-align: center;
+  padding: 80px 20px;
+  color: var(--text-muted);
+}
+.bce-icon { font-size: 56px; margin-bottom: 16px; }
+.builder-canvas-empty h2 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  margin: 0 0 8px;
+  color: #f5f5f7;
+}
+
+.builder-canvas-grid {
+  display: flex;
+  gap: 32px;
+  align-items: flex-start;
+  min-height: 100%;
+}
+
+.builder-round-col {
+  flex: 0 0 280px;
+}
+.brc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding: 0 4px;
+}
+.brc-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.3px;
+  color: #d6ff5c;
+}
+.brc-add {
+  background: rgba(200, 255, 61, 0.1);
+  border: 1px dashed rgba(200, 255, 61, 0.4);
+  color: var(--brand);
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  font-size: 16px;
+  cursor: pointer;
+  font-weight: 700;
+}
+.brc-add:hover {
+  background: rgba(200, 255, 61, 0.22);
+}
+
+.brc-matches {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Match card no construtor */
+.builder-match {
+  background: linear-gradient(180deg, #1d1d1f, #161618);
+  border: 1px solid #2a2a2e;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.bm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: rgba(200, 255, 61, 0.04);
+  border-bottom: 1px solid #25252a;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: rgba(255,255,255,0.6);
+}
+.bm-num { font-family: var(--font-display); }
+.bm-remove {
+  background: transparent;
+  border: none;
+  color: rgba(255,100,100,0.7);
+  font-size: 16px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 4px;
+}
+.bm-remove:hover { color: #ff5252; }
+
+/* Slot do match (clicável + drop target) */
+.builder-slot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #1f1f22;
+  font-size: 13px;
+  transition: background 0.15s ease;
+}
+.builder-slot:last-child { border-bottom: none; }
+.builder-slot:hover { background: rgba(200, 255, 61, 0.06); }
+.builder-slot.drag-over {
+  background: rgba(200, 255, 61, 0.18) !important;
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
+}
+.bs-badge {
+  width: 18px;
+  text-align: center;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.bs-label {
+  flex: 1;
+  font-weight: 500;
+  color: #f5f5f7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.builder-slot.empty .bs-label {
+  color: rgba(200, 255, 61, 0.5);
+  font-style: italic;
+  font-size: 12px;
+}
+.builder-slot.from-match { background: rgba(120, 180, 255, 0.04); }
+.builder-slot.from-match .bs-label { color: #9bc4ff; font-weight: 600; }
+.builder-slot.from-entry .bs-label { color: #f5f5f7; font-weight: 600; }
+.builder-slot.bye { background: rgba(120, 120, 130, 0.05); }
+.builder-slot.bye .bs-label { color: rgba(255,255,255,0.4); font-weight: 600; }
+
+/* Modal do feeder editor */
+.builder-slot-type-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--bg-soft, #1a1a1d);
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #252528;
+}
+.bstt-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px;
+  border-radius: 4px;
+}
+.bstt-opt:hover { background: rgba(200, 255, 61, 0.06); }
+
+/* Templates grid */
+.builder-template-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+.builder-template-card {
+  background: #1a1a1d;
+  border: 1.5px solid #2a2a2e;
+  border-radius: 10px;
+  padding: 14px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  font-family: inherit;
+  color: #f5f5f7;
+  transition: all 0.15s ease;
+}
+.builder-template-card:hover {
+  border-color: var(--brand);
+  background: rgba(200, 255, 61, 0.05);
+  transform: translateY(-1px);
+}
+.builder-template-card strong { font-size: 14px; font-weight: 700; color: var(--brand); }
+.builder-template-card span { font-size: 12px; color: var(--text-muted); }
+
+/* Connector path do construtor — laranjado pra losers (repescagem) */
+.bracket-svg .loser-path {
+  stroke: rgba(255, 165, 80, 0.55) !important;
+  stroke-dasharray: 6 4;
+}
+
+/* Botão "Construtor" na toolbar do bracket */
+.bracket-action-builder {
+  background: rgba(155, 196, 255, 0.08) !important;
+  border-color: rgba(155, 196, 255, 0.4) !important;
+  color: #9bc4ff !important;
+}
+.bracket-action-builder:hover {
+  background: rgba(155, 196, 255, 0.18) !important;
+}
+
+/* Mobile */
+@media (max-width: 720px) {
+  .builder-body {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+  .builder-sidebar {
+    border-right: none;
+    border-bottom: 1px solid #1f1f1f;
+    max-height: 280px;
+  }
+  .builder-canvas-grid {
+    flex-direction: column;
+  }
+  .builder-round-col { flex: 1 1 auto; width: 100%; }
+}

@@ -449,6 +449,14 @@ function navigate(screen) {
     case 'admin-draw':       main.innerHTML = renderAdminDraw();       bindAdminDraw();       break;
     case 'admin-categories': main.innerHTML = renderAdminCategories(); bindAdminCategories(); break;
     case 'admin-players':    main.innerHTML = renderAdminPlayers();    bindAdminPlayers();    break;
+    case 'admin-builder':
+      if (typeof window.tpRenderBracketBuilder === 'function') {
+        main.innerHTML = window.tpRenderBracketBuilder();
+        if (typeof window.tpBindBracketBuilder === 'function') window.tpBindBracketBuilder();
+      } else {
+        main.innerHTML = '<div class="screen"><h2>Construtor não carregado</h2><p>Recarregue a página (Ctrl+F5).</p></div>';
+      }
+      break;
     case 'admin-bracket-edit':
       // Atalho: ativa edit mode e navega pro bracket
       bracketEditMode = true;
@@ -974,6 +982,13 @@ function bindBracketSortActions() {
       currentDrawCategory = currentBracketCategory;
       drawState = { players: [], seeds: [] };
       navigate('admin-draw');
+    });
+  });
+  document.querySelectorAll('[data-action="open-builder"]').forEach(b => {
+    b.addEventListener('click', () => {
+      // Inicializa BUILDER_STATE pra categoria atual
+      if (typeof BUILDER_STATE !== 'undefined') BUILDER_STATE.catId = currentBracketCategory;
+      navigate('admin-builder');
     });
   });
   document.querySelectorAll('[data-action="resort-bracket"]').forEach(b => {
@@ -1526,6 +1541,26 @@ async function saveMatchEdit(catId, matchId) {
    "padrão" do R32 idx 6+7). */
 function autoAdvanceWinnerInBracket(bracket, finishedMatch) {
   if (!bracket || !finishedMatch.winner) return;
+  // Calcula loser para auto-advance de repescagens
+  const loser = finishedMatch.p1 === finishedMatch.winner ? finishedMatch.p2 : finishedMatch.p1;
+
+  // CONSTRUTOR MODULAR: se feeders está definido, usa ele pra propagar
+  if (bracket.feeders && Object.keys(bracket.feeders).length > 0) {
+    Object.keys(bracket.feeders).forEach(targetId => {
+      const f = bracket.feeders[targetId];
+      ['p1', 'p2'].forEach(slot => {
+        const fs = f[slot];
+        if (!fs || fs.type !== 'match' || fs.matchId !== finishedMatch.id) return;
+        const target = _findMatchInBracketById(bracket, targetId);
+        if (!target) return;
+        const valueToPush = fs.take === 'loser' ? loser : finishedMatch.winner;
+        if (target[slot] == null && valueToPush) target[slot] = valueToPush;
+      });
+    });
+    return;
+  }
+
+  // FALLBACK CLÁSSICO: round[i+1].matches[Math.floor(idx/2)]
   const idx = bracket.rounds.indexOf(finishedMatch.round);
   if (idx < 0 || idx >= bracket.rounds.length - 1) return;
   const cur = bracket.matches[finishedMatch.round];
@@ -1538,6 +1573,14 @@ function autoAdvanceWinnerInBracket(bracket, finishedMatch) {
   } else {
     if (nxt[targetIdx].p2 == null) nxt[targetIdx].p2 = finishedMatch.winner;
   }
+}
+
+function _findMatchInBracketById(bracket, matchId) {
+  for (const r of (bracket.rounds || [])) {
+    const m = (bracket.matches[r] || []).find(x => x.id === matchId);
+    if (m) return m;
+  }
+  return null;
 }
 
 /* -------- PLAY -------- */
