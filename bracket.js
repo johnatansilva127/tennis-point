@@ -629,16 +629,18 @@ function drawConnectors(container) {
         const sx = r1.right - innerRect.left;
         const sy = r1.top + r1.height / 2 - innerRect.top;
 
-        // SUPRESSÃO DE STUBS (v4.12.7):
-        // Quando source e target estão verticalmente alinhados (mesma Y) E
-        // próximos horizontalmente, a linha L-shape vira um stub reto curto
-        // que parece "linha solta" no meio da chave. Exemplo: qualifiers do
+        // SUPRESSÃO DE STUBS (v4.12.8):
+        // Quando source e target estão PERFEITAMENTE alinhados verticalmente
+        // (dy < 4px), a linha L-shape vira uma reta horizontal CURTA que
+        // parece "linha solta" no meio da chave. Exemplo concreto: qualifiers
         // R64 (Q1/Q2/Q3) ao lado dos R32-1/R32-8/R32-16 após alignment.
-        // O alinhamento visual já comunica a conexão — pular o desenho.
+        // Medido em produção: dx=70, dy=0 — sem o suppress vira um stub.
+        // O alinhamento visual horizontal já comunica a conexão.
+        // Critério único = dy < 4px (alinhamento perfeito é sempre redundante
+        // em brackets clássicos onde rounds são colunas adjacentes).
         const dyAbs = Math.abs(sy - yt);
-        const dxAbs = Math.abs(xt - sx);
-        if (dyAbs < 4 && dxAbs < 50) {
-          return; // pula stub redundante
+        if (dyAbs < 4) {
+          return; // pula stub redundante (linha reta horizontal)
         }
 
         const midX = sx + (xt - sx) / 2;
