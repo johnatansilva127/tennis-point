@@ -111,7 +111,10 @@ function renderMatch(match, categoryLabel, isAdmin, editMode) {
     <path d="M6.5 9.5h3v2.5h-3zM5 12.5h6v1H5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
   </svg>`;
 
-  const isByeXBye = (!match.p1 && !match.p2) || match.isBye;
+  // Esconde APENAS matches que são definitivamente BYE x BYE (isBye=true).
+  // Matches com slots null e SEM isBye são "aguardando alimentadores" (R16/QF/SF/F
+  // que recebem vencedor de rounds anteriores) — devem aparecer pra conectores serem desenhados.
+  const isByeXBye = match.isBye === true && !match.p1 && !match.p2;
   const hideClass = isByeXBye ? ' hidden-match' : '';
 
   return `
@@ -607,6 +610,7 @@ function attachBracketObservers(container) {
 window.addEventListener('resize', () => {
   document.querySelectorAll('.bracket-scroll').forEach(c => layoutBracket(c));
 });
+
 
 
 /* Helper exposto: redesenhar apenas conectores (usado durante drag pra performance) */

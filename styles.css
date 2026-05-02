@@ -2033,20 +2033,35 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
    pra rastrear R64 → Final visualmente. */
 .bracket-svg path {
   fill: none;
-  stroke: rgba(255, 255, 255, 0.32);
-  stroke-width: 2;
+  stroke: rgba(255, 255, 255, 0.55);
+  stroke-width: 2.5;
   stroke-linecap: round;
   stroke-linejoin: round;
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.6));
 }
 .bracket-svg path.winner-path {
   stroke: rgb(200, 255, 61);
-  stroke-width: 2.5;
-  filter: drop-shadow(0 0 3px rgba(200, 255, 61, 0.55))
-          drop-shadow(0 0 1px rgba(200, 255, 61, 0.85));
+  stroke-width: 3.5;
+  filter: drop-shadow(0 0 6px rgba(200, 255, 61, 0.8))
+          drop-shadow(0 0 2px rgba(200, 255, 61, 1));
+  animation: winner-pulse 2.4s ease-in-out infinite;
+}
+@keyframes winner-pulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 6px rgba(200, 255, 61, 0.8))
+            drop-shadow(0 0 2px rgba(200, 255, 61, 1));
+  }
+  50% {
+    filter: drop-shadow(0 0 10px rgba(200, 255, 61, 1))
+            drop-shadow(0 0 4px rgba(200, 255, 61, 1));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bracket-svg path.winner-path { animation: none; }
 }
 @media (max-width: 480px) {
-  .bracket-svg path { stroke-width: 1.5; }
-  .bracket-svg path.winner-path { stroke-width: 2; }
+  .bracket-svg path { stroke-width: 2; }
+  .bracket-svg path.winner-path { stroke-width: 2.8; }
 }
 
 /* Bracket round: posicionamento dos matches é feito por JS (position:absolute
