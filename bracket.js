@@ -29,10 +29,22 @@ function hashStr(s) {
 
 function renderPlayerRow(memberId, scores, isWinner, isBye, idx) {
   if (!memberId) {
+    // Distingue BYE estrutural (jogo definido sem oponente — vencedor passa direto)
+    // de slot AGUARDANDO feeder (vencedor de outro match ainda não decidido).
+    // BYE → ícone × cinza com label "BYE"
+    // Aguardando → ícone ? sutil com label "A definir"
+    if (isBye === true) {
+      return `
+        <div class="bk-player-row bye">
+          <div class="avatar bye">×</div>
+          <div class="bk-player-name">BYE</div>
+        </div>
+      `;
+    }
     return `
-      <div class="bk-player-row bye">
-        <div class="avatar bye">×</div>
-        <div class="bk-player-name">BYE</div>
+      <div class="bk-player-row tbd">
+        <div class="avatar tbd">?</div>
+        <div class="bk-player-name tbd-name">A definir</div>
       </div>
     `;
   }
@@ -111,11 +123,16 @@ function renderMatch(match, categoryLabel, isAdmin, editMode) {
     <path d="M6.5 9.5h3v2.5h-3zM5 12.5h6v1H5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
   </svg>`;
 
-  // Esconde APENAS matches que são definitivamente BYE x BYE (isBye=true).
-  // Matches com slots null e SEM isBye são "aguardando alimentadores" (R16/QF/SF/F
-  // que recebem vencedor de rounds anteriores) — devem aparecer pra conectores serem desenhados.
-  const isByeXBye = match.isBye === true && !match.p1 && !match.p2;
-  const hideClass = isByeXBye ? ' hidden-match' : '';
+  // Esconde matches "totalmente vazios" — sem p1, sem p2 e sem winner.
+  // Isso engloba:
+  //   - BYE × BYE (isBye=true ambos null): nunca rolou jogo, esconder
+  //   - R16/QF/SF/F aguardando alimentadores: até que ALGUM feeder defina
+  //     winner, o match não tem nada útil pra mostrar — esconder pra ficar
+  //     visual limpo tipo Letzplay (sem cards "vazios" poluindo a chave).
+  // Quando o primeiro feeder gerar winner, o match aparece com 1 jogador
+  // + slot "A definir" elegante (renderPlayerRow trata).
+  const isCompletelyEmpty = !match.p1 && !match.p2 && !match.winner;
+  const hideClass = isCompletelyEmpty ? ' hidden-match' : '';
 
   return `
     <div class="bk-match${hideClass}" data-match-id="${match.id}" data-round="${match.round}"${match.winner ? ' data-has-winner="true"' : ''}>

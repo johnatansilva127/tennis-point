@@ -1180,6 +1180,24 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   box-shadow: none;
 }
 
+/* Slot "A definir" — vencedor de match anterior ainda não decidido.
+   Mais sutil que BYE pra deixar claro que é só uma espera, não um BYE real. */
+.bk-player-row.tbd .bk-player-name,
+.bk-player-name.tbd-name {
+  color: rgba(255,255,255,0.42);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 12.5px;
+}
+.bk-player-row .avatar.tbd,
+.avatar.tbd {
+  background: rgba(200, 255, 61, 0.08) !important;
+  color: rgba(200, 255, 61, 0.55) !important;
+  font-weight: 700;
+  box-shadow: none;
+  border: 1px dashed rgba(200, 255, 61, 0.25);
+}
+
 /* ----- Colunas de score (set scores) ----- */
 .bk-scores {
   display: flex;
