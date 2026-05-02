@@ -375,24 +375,30 @@ function layoutBracket(container) {
       return yPositions[idx.ri] && yPositions[idx.ri][idx.mi];
     };
 
-    // Itera matches e ajusta Y dos que têm UM destino explícito
+    // Itera matches e ajusta Y APENAS dos que estão fora do padrão clássico.
+    // Padrão clássico: round[ri+1].matches[mi] vem de round[ri].matches[mi*2] (slot p1)
+    // e round[ri].matches[mi*2+1] (slot p2).
+    // Se o feeder casa com isso, NÃO mexe (deixa o layout normal trabalhar).
+    // Se diverge (qualifier alimentando match não-adjacente), alinha Y com destino.
     Object.keys(reverseFeeders).forEach(srcId => {
       const dests = reverseFeeders[srcId];
       const srcIdx = matchIndexMap[srcId];
       if (!srcIdx) return;
+      if (dests.length !== 1) return;
 
-      if (dests.length === 1) {
-        // Match alimenta UM destino: alinha Y direto
-        const dstY = getY(dests[0].dstId);
+      const dst = dests[0];
+      const dstIdx = matchIndexMap[dst.dstId];
+      if (!dstIdx) return;
+
+      // Posição esperada na convenção clássica
+      const expectedSrcMi = dst.slot === 'p1' ? dstIdx.mi * 2 : dstIdx.mi * 2 + 1;
+      const isClassical = (srcIdx.ri === dstIdx.ri - 1) && (srcIdx.mi === expectedSrcMi);
+
+      if (!isClassical) {
+        // Fora do padrão: alinha Y com destino
+        const dstY = getY(dst.dstId);
         if (dstY != null) {
           yPositions[srcIdx.ri][srcIdx.mi] = dstY;
-        }
-      } else if (dests.length === 2) {
-        // Alimenta dois destinos: meio-termo
-        const yA = getY(dests[0].dstId);
-        const yB = getY(dests[1].dstId);
-        if (yA != null && yB != null) {
-          yPositions[srcIdx.ri][srcIdx.mi] = (yA + yB) / 2;
         }
       }
     });
