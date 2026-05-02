@@ -628,6 +628,19 @@ function drawConnectors(container) {
         const r1 = srcEl.getBoundingClientRect();
         const sx = r1.right - innerRect.left;
         const sy = r1.top + r1.height / 2 - innerRect.top;
+
+        // SUPRESSÃO DE STUBS (v4.12.7):
+        // Quando source e target estão verticalmente alinhados (mesma Y) E
+        // próximos horizontalmente, a linha L-shape vira um stub reto curto
+        // que parece "linha solta" no meio da chave. Exemplo: qualifiers do
+        // R64 (Q1/Q2/Q3) ao lado dos R32-1/R32-8/R32-16 após alignment.
+        // O alinhamento visual já comunica a conexão — pular o desenho.
+        const dyAbs = Math.abs(sy - yt);
+        const dxAbs = Math.abs(xt - sx);
+        if (dyAbs < 4 && dxAbs < 50) {
+          return; // pula stub redundante
+        }
+
         const midX = sx + (xt - sx) / 2;
         const won = srcEl.dataset.hasWinner === 'true';
         const isLoser = fs.take === 'loser';
