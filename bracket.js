@@ -291,37 +291,55 @@ function layoutBracket(container) {
   const matchHeight = firstMatch.offsetHeight || 130;
   const baseGap = BASE_GAP;
 
-  // Calcula posições Y dos matches em CADA round
+  // Calcula posições Y dos matches em CADA round.
+  // ESTRATÉGIA "ANCHOR-AWARE":
+  //   - ri === 0  → empilhamento simples (gap = baseGap entre matches)
+  //   - ri > 0    → SE prev round tem matches.length*2 matches (eliminatória
+  //                 clássica completa), deriva do meio dos dois alimentadores;
+  //                 SENÃO trata como ANCHOR (empilhamento simples) — significa
+  //                 que prev round é parcial (só qualifiers que alimentam alguns
+  //                 matches deste round, não todos).
+  //   Crítico pra brackets como Cat-A, onde R64 tem 3 jogos (Q1, Q2, Q3) que
+  //   alimentam apenas R32[0], R32[7], R32[15]. Sem isso o R32 inteiro herda
+  //   posições erradas do R64 e a chave fica desalinhada.
   const yPositions = []; // yPositions[ri][mi] = topPx
+  const roundIsAnchor = []; // útil pra debug futuro
   rounds.forEach((roundEl, ri) => {
     const matches = roundEl.querySelectorAll('.bk-match');
     yPositions[ri] = [];
+
+    let useAnchorLayout = false;
     if (ri === 0) {
-      // Round mais à esquerda: matches empilhados com gap baseGap
+      useAnchorLayout = true;
+    } else {
+      const prevCount = yPositions[ri - 1].length;
+      // Se prev round não tem o dobro deste round, prev é parcial → este round
+      // é o "verdadeiro" anchor; usa layout empilhado em vez de derivar.
+      if (prevCount < matches.length * 2) {
+        useAnchorLayout = true;
+      }
+    }
+    roundIsAnchor[ri] = useAnchorLayout;
+
+    if (useAnchorLayout) {
       for (let mi = 0; mi < matches.length; mi++) {
         yPositions[ri][mi] = mi * (matchHeight + baseGap);
       }
     } else {
-      // Round derivado: cada match[mi] está no MEIO de matches[mi*2] e matches[mi*2+1]
-      // do round anterior. Se não tem match alimentador (caso de R32 sem R64 vindo),
-      // cai no fallback de gap dobrado.
       const prevYs = yPositions[ri - 1];
-      const prevCount = prevYs.length;
       for (let mi = 0; mi < matches.length; mi++) {
         const fa = mi * 2;
         const fb = mi * 2 + 1;
         if (prevYs[fa] != null && prevYs[fb] != null) {
-          // Centro entre os dois alimentadores (em coordenada de TOP, então
-          // o centro do match novo deve estar no centro dos dois antigos)
+          // Centro do match = média dos centros dos dois alimentadores
           const centerA = prevYs[fa] + matchHeight / 2;
           const centerB = prevYs[fb] + matchHeight / 2;
           const targetCenter = (centerA + centerB) / 2;
           yPositions[ri][mi] = targetCenter - matchHeight / 2;
         } else if (prevYs[fa] != null) {
-          // Apenas um alimentador (BYE estrutural ou bracket assimétrico)
           yPositions[ri][mi] = prevYs[fa];
         } else {
-          // Fallback puro de spacing dobrado
+          // Fallback robusto (não deveria ser atingido com o teste prevCount acima)
           const gap = (matchHeight + baseGap) * Math.pow(2, ri) - matchHeight;
           const padding = ((matchHeight + baseGap) * Math.pow(2, ri) - matchHeight) / 2 - baseGap / 2;
           yPositions[ri][mi] = padding + mi * (matchHeight + gap);
@@ -359,10 +377,15 @@ function layoutBracket(container) {
       });
     });
 
-    // Mapa rounds[round] -> list of match objects, com índices
+    // Mapa rounds[round] -> list of match objects, com índices.
+    // BUG FIX (v4.12.5): antes usava `rName` como key direto, mas rounds é
+    // uma NodeList de DOM elements — `rName` era um <div>, não uma string.
+    // Resultado: matchIndexMap ficava vazio e o alignment nunca rodava.
+    // Solução: lê data-round attribute do elemento.
     const matchIndexMap = {};
-    rounds.forEach((rName, ri) => {
-      const list = _bracketForAlign.matches[rName] || [];
+    rounds.forEach((roundEl, ri) => {
+      const rName = roundEl.dataset.round;
+      const list = (rName && _bracketForAlign.matches[rName]) || [];
       list.forEach((m, mi) => {
         matchIndexMap[m.id] = { ri, mi };
       });
