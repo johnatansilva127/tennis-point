@@ -330,6 +330,75 @@ function layoutBracket(container) {
     }
   });
 
+  // ============ SEGUNDA PASSADA: FEEDER-AWARE ALIGNMENT ============
+  // Se o bracket tem feeders explícitos, ajusta Y dos matches "raiz" (que
+  // alimentam outros matches) pra ficarem alinhados verticalmente com seus
+  // destinos. Isso evita linhas longas e cruzadas quando qualifiers alimentam
+  // matches não-adjacentes (ex: Q1 → J1, Q2 → J8, Q3 → J16 na Cat-A).
+  let _feedersForAlign = {};
+  let _bracketForAlign = null;
+  try {
+    const _catId2 = (typeof currentBracketCategory !== 'undefined') ? currentBracketCategory : null;
+    if (_catId2 && typeof STATE !== 'undefined' && STATE.brackets && STATE.brackets[_catId2]) {
+      _bracketForAlign = STATE.brackets[_catId2];
+      _feedersForAlign = _bracketForAlign.feeders || {};
+    }
+  } catch (e) {}
+
+  if (Object.keys(_feedersForAlign).length > 0 && _bracketForAlign) {
+    // Constrói reverse map: srcMatchId -> [{ dstId, slot, dstRound }]
+    const reverseFeeders = {};
+    Object.keys(_feedersForAlign).forEach(dstId => {
+      const f = _feedersForAlign[dstId];
+      ['p1', 'p2'].forEach(slot => {
+        const fs = f[slot];
+        if (fs && fs.type === 'match' && fs.matchId) {
+          if (!reverseFeeders[fs.matchId]) reverseFeeders[fs.matchId] = [];
+          reverseFeeders[fs.matchId].push({ dstId, slot });
+        }
+      });
+    });
+
+    // Mapa rounds[round] -> list of match objects, com índices
+    const matchIndexMap = {};
+    rounds.forEach((rName, ri) => {
+      const list = _bracketForAlign.matches[rName] || [];
+      list.forEach((m, mi) => {
+        matchIndexMap[m.id] = { ri, mi };
+      });
+    });
+
+    // Função pra pegar Y de um match
+    const getY = (matchId) => {
+      const idx = matchIndexMap[matchId];
+      if (!idx) return null;
+      return yPositions[idx.ri] && yPositions[idx.ri][idx.mi];
+    };
+
+    // Itera matches e ajusta Y dos que têm UM destino explícito
+    Object.keys(reverseFeeders).forEach(srcId => {
+      const dests = reverseFeeders[srcId];
+      const srcIdx = matchIndexMap[srcId];
+      if (!srcIdx) return;
+
+      if (dests.length === 1) {
+        // Match alimenta UM destino: alinha Y direto
+        const dstY = getY(dests[0].dstId);
+        if (dstY != null) {
+          yPositions[srcIdx.ri][srcIdx.mi] = dstY;
+        }
+      } else if (dests.length === 2) {
+        // Alimenta dois destinos: meio-termo
+        const yA = getY(dests[0].dstId);
+        const yB = getY(dests[1].dstId);
+        if (yA != null && yB != null) {
+          yPositions[srcIdx.ri][srcIdx.mi] = (yA + yB) / 2;
+        }
+      }
+    });
+  }
+  // ============ FIM FEEDER-AWARE ALIGNMENT ============
+
   // Aplica position:absolute em cada match com Y calculado.
   // Pra altura do round, pegamos o ÚLTIMO match top + matchHeight + um pad pro
   // botão "+ Match em..." caber se em edit mode.
@@ -346,8 +415,9 @@ function layoutBracket(container) {
       m.style.left = '0';
       m.style.right = '0';
     });
+    // Usa Math.max porque feeder-aware pode reordenar Y (ex: Q3 em y=2670 mesmo no idx 2)
     const lastY = yPositions[ri].length
-      ? yPositions[ri][yPositions[ri].length - 1] + matchHeight
+      ? Math.max(...yPositions[ri]) + matchHeight
       : matchHeight;
     const heightWithBtn = lastY + ADD_BTN_HEIGHT;
     roundEl.style.height = `${heightWithBtn}px`;
@@ -610,8 +680,6 @@ function attachBracketObservers(container) {
 window.addEventListener('resize', () => {
   document.querySelectorAll('.bracket-scroll').forEach(c => layoutBracket(c));
 });
-
-
 
 /* Helper exposto: redesenhar apenas conectores (usado durante drag pra performance) */
 window.tpRedrawConnectorsOnly = function(container) {
